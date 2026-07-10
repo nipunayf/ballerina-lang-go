@@ -1585,20 +1585,22 @@ func (n *NodeBuilder) TransformFunctionDefinition(funcDefNode *tree.FunctionDefi
 
 func (n *NodeBuilder) createFunctionNode(funcName *tree.IdentifierToken, qualifierList tree.NodeList[tree.Token], funcSignature *tree.FunctionSignatureNode, funcBody tree.FunctionBodyNode) *BLangFunction {
 	blFunction := BLangFunction{}
-	name := createIdentifierFromTokenInternal(n.getPosition(funcName), funcName, false)
+	name := n.createIdentifierNodeFromToken(n.getPosition(funcName), funcName)
 	n.populateFunctionNode(name, qualifierList, funcSignature, funcBody, &blFunction)
 	return &blFunction
 }
 
-func (n *NodeBuilder) populateFunctionNode(name BLangIdentifier, qualifierList tree.NodeList[tree.Token], funcSignature *tree.FunctionSignatureNode, funcBody tree.FunctionBodyNode, blFunction *BLangFunction) {
+func (n *NodeBuilder) populateFunctionNode(name IdentifierNode, qualifierList tree.NodeList[tree.Token], funcSignature *tree.FunctionSignatureNode, funcBody tree.FunctionBodyNode, blFunction *BLangFunction) {
 	// Set function name
-	blFunction.Name = &name
+	blFunction.Name = name
 	// Set method qualifiers
 	setFunctionQualifiers(blFunction, qualifierList)
 	// Set function signature
-	n.anonTypeNameSuffixes = append(n.anonTypeNameSuffixes, name.Value)
+	n.anonTypeNameSuffixes = append(n.anonTypeNameSuffixes, name.GetValue())
+	defer func() {
+		n.anonTypeNameSuffixes = n.anonTypeNameSuffixes[:len(n.anonTypeNameSuffixes)-1]
+	}()
 	n.populateFuncSignature(blFunction, funcSignature)
-	n.anonTypeNameSuffixes = n.anonTypeNameSuffixes[:len(n.anonTypeNameSuffixes)-1]
 
 	// Set the function body
 	if funcBody == nil {
@@ -2767,8 +2769,8 @@ func (n *NodeBuilder) TransformSpreadField(spreadFieldNode *tree.SpreadFieldNode
 func (n *NodeBuilder) TransformNamedArgument(namedArgumentNode *tree.NamedArgumentNode) BLangNode {
 	namedArg := &BLangNamedArgsExpression{}
 	namedArg.pos = n.getPosition(namedArgumentNode)
-	name := createIdentifierFromToken(n.getPosition(namedArgumentNode.ArgumentName()), namedArgumentNode.ArgumentName().Name())
-	namedArg.Name = &name
+	nameToken := namedArgumentNode.ArgumentName().Name()
+	namedArg.Name = n.createIdentifierNodeFromToken(n.getPosition(nameToken), nameToken)
 	namedArg.Expr = n.createExpression(namedArgumentNode.Expression())
 	return namedArg
 }
@@ -5461,8 +5463,7 @@ func (n *NodeBuilder) TransformResourcePathParameter(resourcePathParameterNode *
 func (n *NodeBuilder) createResourceMethodNode(funcDef *tree.FunctionDefinition) *BLangResourceMethod {
 	rm := &BLangResourceMethod{}
 	rm.pos = n.getPositionWithoutMetadata(funcDef)
-	name := createIdentifierFromTokenInternal(n.getPosition(funcDef.FunctionName()), funcDef.FunctionName(), false)
-	rm.Name = &name
+	rm.Name = n.createIdentifierNodeFromToken(n.getPosition(funcDef.FunctionName()), funcDef.FunctionName())
 	setFunctionQualifiersOnBase(&rm.bLangInvokableNodeBase, funcDef.QualifierList())
 	rm.SetAttached()
 	rm.SetResource()
@@ -5911,7 +5912,10 @@ func (n *NodeBuilder) getBLangVariableNode(bindingPattern tree.BindingPatternNod
 		varName = captureBindingPattern.VariableName()
 	}
 
-	return createSimpleVariableNodeWithLocationTokenLocation(varPos, varName, n.getPosition(varName))
+	simpleVar := createSimpleVariableNode()
+	simpleVar.pos = varPos
+	simpleVar.SetName(n.createIdentifierNodeFromToken(n.getPosition(varName), varName))
+	return simpleVar
 }
 
 func (n *NodeBuilder) badTopLevel(node tree.Node) *BLangBadTopLevelNode {
