@@ -61,7 +61,6 @@ type Symbol interface {
 	Kind() SymbolKind
 	SetType(semtypes.SemType)
 	Location() diagnostics.Location
-	SetLocation(diagnostics.Location)
 	IsPublic() bool
 	Copy() Symbol
 }
@@ -808,10 +807,6 @@ func (ba *symbolBase) Location() diagnostics.Location {
 	return ba.location
 }
 
-func (ba *symbolBase) SetLocation(location diagnostics.Location) {
-	ba.location = location
-}
-
 func (ba *symbolBase) IsPublic() bool {
 	return ba.isPublic
 }
@@ -833,10 +828,6 @@ func (ref *SymbolRef) Kind() SymbolKind {
 }
 
 func (ref *SymbolRef) Location() diagnostics.Location {
-	panic("unexpected")
-}
-
-func (ref *SymbolRef) SetLocation(diagnostics.Location) {
 	panic("unexpected")
 }
 
@@ -1178,9 +1169,9 @@ func (fs *functionSymbol) ParamNames() []string {
 	return fs.Signature().ParamNames
 }
 
-func NewFunctionSymbol(name string, signature FunctionSignature, isPublic bool) FunctionSymbol {
+func NewFunctionSymbol(name string, signature FunctionSignature, isPublic bool, location diagnostics.Location) FunctionSymbol {
 	return &functionSymbol{
-		symbolBase: symbolBase{name: name, isPublic: isPublic},
+		symbolBase: symbolBase{name: name, isPublic: isPublic, location: location},
 		signature:  signature,
 	}
 }
@@ -1259,7 +1250,7 @@ func (fs *FunctionSignature) IsTransactional() bool {
 	return fs.Flags&FuncSymbolFlagTransactional != 0
 }
 
-func NewVariableSymbol(name string, isPublic bool, isConst bool, isParameter bool) VariableSymbol {
+func NewVariableSymbol(name string, isPublic bool, isConst bool, isParameter bool, location diagnostics.Location) VariableSymbol {
 	var flags valueSymbolFlags
 	if isConst {
 		flags |= valueSymbolFlagConst
@@ -1268,24 +1259,24 @@ func NewVariableSymbol(name string, isPublic bool, isConst bool, isParameter boo
 		flags |= valueSymbolFlagParameter
 	}
 	return VariableSymbol{
-		symbolBase: symbolBase{name: name, isPublic: isPublic},
+		symbolBase: symbolBase{name: name, isPublic: isPublic, location: location},
 		flags:      flags,
 	}
 }
 
-func NewConstantValueSymbol(name string, isPublic bool) *ConstantValueSymbol {
+func NewConstantValueSymbol(name string, isPublic bool, location diagnostics.Location) *ConstantValueSymbol {
 	return &ConstantValueSymbol{
-		VariableSymbol: NewVariableSymbol(name, isPublic, true, false),
+		VariableSymbol: NewVariableSymbol(name, isPublic, true, false, location),
 	}
 }
 
-func NewTypeSymbol(name string, isPublic bool) TypeSymbol {
+func NewTypeSymbol(name string, isPublic bool, location diagnostics.Location) TypeSymbol {
 	return TypeSymbol{
-		symbolBase: symbolBase{name: name, isPublic: isPublic},
+		symbolBase: symbolBase{name: name, isPublic: isPublic, location: location},
 	}
 }
 
-func NewAnnotationSymbol(name string, isPublic bool, isConst bool, attachPoints []string) AnnotationSymbol {
+func NewAnnotationSymbol(name string, isPublic bool, isConst bool, attachPoints []string, location diagnostics.Location) AnnotationSymbol {
 	var attachPointSet annotationAttachPointSet
 	for _, point := range attachPoints {
 		source := false
@@ -1303,37 +1294,37 @@ func NewAnnotationSymbol(name string, isPublic bool, isConst bool, attachPoints 
 		attachPointSet |= bit
 	}
 	return AnnotationSymbol{
-		symbolBase:   symbolBase{name: name, isPublic: isPublic},
+		symbolBase:   symbolBase{name: name, isPublic: isPublic, location: location},
 		isConst:      isConst,
 		attachPoints: attachPointSet,
 	}
 }
 
-func NewXMLNSSymbol(prefix, uri string) *XMLNSSymbol {
+func NewXMLNSSymbol(prefix, uri string, location diagnostics.Location) *XMLNSSymbol {
 	return &XMLNSSymbol{
-		symbolBase: symbolBase{name: prefix, isPublic: true},
+		symbolBase: symbolBase{name: prefix, isPublic: true, location: location},
 		uri:        uri,
 	}
 }
 
-func NewClassSymbol(name string, isPublic bool) ClassSymbol {
+func NewClassSymbol(name string, isPublic bool, location diagnostics.Location) ClassSymbol {
 	return &classSymbol{
-		classSymbolBase: newClassSymbolBase(name, isPublic),
+		classSymbolBase: newClassSymbolBase(name, isPublic, location),
 	}
 }
 
 // NewNetworkClassSymbol creates a ClassSymbol for classes representing network
 // interaction objects (e.g. clients and services).
-func NewNetworkClassSymbol(name string, isPublic bool) ClassSymbol {
+func NewNetworkClassSymbol(name string, isPublic bool, location diagnostics.Location) ClassSymbol {
 	return &NetworkClassSymbol{
-		classSymbolBase: newClassSymbolBase(name, isPublic),
+		classSymbolBase: newClassSymbolBase(name, isPublic, location),
 	}
 }
 
-func newClassSymbolBase(name string, isPublic bool) classSymbolBase {
+func newClassSymbolBase(name string, isPublic bool, location diagnostics.Location) classSymbolBase {
 	return classSymbolBase{
 		TypeSymbol: TypeSymbol{
-			symbolBase: symbolBase{name: name, isPublic: isPublic},
+			symbolBase: symbolBase{name: name, isPublic: isPublic, location: location},
 		},
 		methods: map[string]SymbolRef{},
 	}
@@ -1347,10 +1338,10 @@ func (c *classSymbolBase) AddResourceMethod(ref SymbolRef) {
 	c.resourceMethods = append(c.resourceMethods, ref)
 }
 
-func NewResourceMethodSymbol(name, methodName string, isPublic bool) *ResourceMethodSymbol {
+func NewResourceMethodSymbol(name, methodName string, isPublic bool, location diagnostics.Location) *ResourceMethodSymbol {
 	return &ResourceMethodSymbol{
 		functionSymbol: functionSymbol{
-			symbolBase: symbolBase{name: name, isPublic: isPublic},
+			symbolBase: symbolBase{name: name, isPublic: isPublic, location: location},
 		},
 		methodName: methodName,
 	}
@@ -1381,26 +1372,26 @@ func (r *ResourceMethodSymbol) Copy() Symbol {
 	return &cp
 }
 
-func NewRecordSymbol(name string, isPublic bool) RecordSymbol {
+func NewRecordSymbol(name string, isPublic bool, location diagnostics.Location) RecordSymbol {
 	return RecordSymbol{
 		TypeSymbol: TypeSymbol{
-			symbolBase: symbolBase{name: name, isPublic: isPublic},
+			symbolBase: symbolBase{name: name, isPublic: isPublic, location: location},
 		},
 	}
 }
 
-func NewObjectTypeSymbol(name string, isPublic bool) ObjectTypeSymbol {
+func NewObjectTypeSymbol(name string, isPublic bool, location diagnostics.Location) ObjectTypeSymbol {
 	return ObjectTypeSymbol{
 		TypeSymbol: TypeSymbol{
-			symbolBase: symbolBase{name: name, isPublic: isPublic},
+			symbolBase: symbolBase{name: name, isPublic: isPublic, location: location},
 		},
 	}
 }
 
-func NewErrorTypeSymbol(name string, isPublic bool) ErrorTypeSymbol {
+func NewErrorTypeSymbol(name string, isPublic bool, location diagnostics.Location) ErrorTypeSymbol {
 	return ErrorTypeSymbol{
 		TypeSymbol: TypeSymbol{
-			symbolBase: symbolBase{name: name, isPublic: isPublic},
+			symbolBase: symbolBase{name: name, isPublic: isPublic, location: location},
 		},
 	}
 }
@@ -1414,9 +1405,9 @@ func (c *classSymbolBase) MethodSymbol(name string) (SymbolRef, bool) {
 	return ref, ok
 }
 
-func NewDependentlyTypedFunctionSymbol(name string, paramNames []string, nRequiredArgs int, flags FuncSymbolFlags, isPublic bool) DependentlyTypedFunctionSymbol {
+func NewDependentlyTypedFunctionSymbol(name string, paramNames []string, nRequiredArgs int, flags FuncSymbolFlags, isPublic bool, location diagnostics.Location) DependentlyTypedFunctionSymbol {
 	return &dependentlyTypedFunctionSymbol{
-		symbolBase:    symbolBase{name: name, isPublic: isPublic},
+		symbolBase:    symbolBase{name: name, isPublic: isPublic, location: location},
 		paramNames:    paramNames,
 		nRequiredArgs: nRequiredArgs,
 		Flags:         flags,
@@ -1431,14 +1422,6 @@ func (s *dependentlyTypedFunctionSymbol) Type() semtypes.SemType {
 
 func (s *dependentlyTypedFunctionSymbol) SetType(_ semtypes.SemType) {
 	panic("DependentlyTypedFunctionSymbol must be Monomorphized")
-}
-
-func (s *dependentlyTypedFunctionSymbol) Location() diagnostics.Location {
-	return s.symbolBase.Location()
-}
-
-func (s *dependentlyTypedFunctionSymbol) SetLocation(location diagnostics.Location) {
-	s.symbolBase.SetLocation(location)
 }
 
 func (s *dependentlyTypedFunctionSymbol) Signature() FunctionSignature {
