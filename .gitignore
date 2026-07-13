@@ -55,3 +55,6 @@ parser/testdata/**/*.json
 
 # Local lint tool binary
 /bin/golangci-lint
+
+# Local wayfinder backlog (ls-iteration skill) — working state, never committed
+.scratch/
