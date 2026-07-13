@@ -18,6 +18,7 @@ package server
 
 import (
 	"testing"
+
 	"ballerina-lang-go/ls/protocol"
 )
 
@@ -31,16 +32,18 @@ func TestDocumentStoreAppliesUTF16Changes(t *testing.T) {
 
 	store.change(protocol.DidChangeTextDocumentParams{
 		TextDocument: protocol.VersionedTextDocumentIdentifier{
-			TextDocumentIdentifier: protocol.TextDocumentIdentifier{URI: "file:///workspace/main.bal"},
-			Version:                2,
+			URI:     "file:///workspace/main.bal",
+			Version: 2,
 		},
-		ContentChanges: []protocol.TextDocumentContentChangeEvent{{
-			Range: &protocol.Range{
-				Start: protocol.Position{Line: 0, Character: 2},
-				End:   protocol.Position{Line: 0, Character: 3},
-			},
-			Text: "y",
-		}},
+		ContentChanges: []protocol.TextDocumentContentChangeEvent{
+			protocol.NewTextDocumentContentChangeEventTextDocumentContentChangePartial(protocol.TextDocumentContentChangePartial{
+				Range: protocol.Range{
+					Start: protocol.Position{Line: 0, Character: 2},
+					End:   protocol.Position{Line: 0, Character: 3},
+				},
+				Text: "y",
+			}),
+		},
 	})
 
 	document, ok := store.document("file:///workspace/main.bal")
@@ -59,29 +62,28 @@ func TestDocumentStoreRejectsInvalidBatchAtomically(t *testing.T) {
 		Version: 1,
 		Text:    "abc",
 	})
-	wrongLength := uint32(2)
 
 	store.change(protocol.DidChangeTextDocumentParams{
 		TextDocument: protocol.VersionedTextDocumentIdentifier{
-			TextDocumentIdentifier: protocol.TextDocumentIdentifier{URI: "file:///workspace/main.bal"},
-			Version:                2,
+			URI:     "file:///workspace/main.bal",
+			Version: 2,
 		},
 		ContentChanges: []protocol.TextDocumentContentChangeEvent{
-			{
-				Range: &protocol.Range{
+			protocol.NewTextDocumentContentChangeEventTextDocumentContentChangePartial(protocol.TextDocumentContentChangePartial{
+				Range: protocol.Range{
 					Start: protocol.Position{Line: 0, Character: 0},
 					End:   protocol.Position{Line: 0, Character: 1},
 				},
 				Text: "x",
-			},
-			{
-				Range: &protocol.Range{
+			}),
+			protocol.NewTextDocumentContentChangeEventTextDocumentContentChangePartial(protocol.TextDocumentContentChangePartial{
+				Range: protocol.Range{
 					Start: protocol.Position{Line: 0, Character: 1},
 					End:   protocol.Position{Line: 0, Character: 2},
 				},
-				RangeLength: &wrongLength,
+				RangeLength: protocol.NewOptional(uint32(2)),
 				Text:        "y",
-			},
+			}),
 		},
 	})
 
@@ -103,13 +105,15 @@ func TestDocumentStoreIgnoresStaleChangesAndNonFileURIs(t *testing.T) {
 	})
 	store.change(protocol.DidChangeTextDocumentParams{
 		TextDocument: protocol.VersionedTextDocumentIdentifier{
-			TextDocumentIdentifier: protocol.TextDocumentIdentifier{URI: "file:///workspace/main.bal"},
-			Version:                2,
+			URI:     "file:///workspace/main.bal",
+			Version: 2,
 		},
-		ContentChanges: []protocol.TextDocumentContentChangeEvent{{
-			Range: &protocol.Range{End: protocol.Position{Line: 0, Character: 7}},
-			Text:  "stale",
-		}},
+		ContentChanges: []protocol.TextDocumentContentChangeEvent{
+			protocol.NewTextDocumentContentChangeEventTextDocumentContentChangePartial(protocol.TextDocumentContentChangePartial{
+				Range: protocol.Range{End: protocol.Position{Line: 0, Character: 7}},
+				Text:  "stale",
+			}),
+		},
 	})
 	store.open(protocol.TextDocumentItem{URI: "untitled:main.bal", Version: 1, Text: "ignored"})
 

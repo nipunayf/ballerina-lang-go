@@ -28,7 +28,7 @@ type documentStore struct {
 }
 
 type document struct {
-	languageID string
+	languageID protocol.LanguageKind
 	version    int32
 	text       string
 }
@@ -37,39 +37,44 @@ func newDocumentStore() *documentStore {
 	return &documentStore{documents: make(map[string]document)}
 }
 
-func (s *documentStore) open(item protocol.TextDocumentItem) {
+func (s *documentStore) open(item protocol.TextDocumentItem) (document, bool) {
 	if !isFileURI(item.URI) {
-		return
+		return document{}, false
 	}
-	s.documents[item.URI] = document{
+	doc := document{
 		languageID: item.LanguageID,
 		version:    item.Version,
 		text:       item.Text,
 	}
+	s.documents[item.URI] = doc
+	return doc, true
 }
 
-func (s *documentStore) change(params protocol.DidChangeTextDocumentParams) {
+func (s *documentStore) change(params protocol.DidChangeTextDocumentParams) (document, bool) {
 	if !isFileURI(params.TextDocument.URI) {
-		return
+		return document{}, false
 	}
-	document, ok := s.documents[params.TextDocument.URI]
-	if !ok || params.TextDocument.Version <= document.version {
-		return
+	current, ok := s.documents[params.TextDocument.URI]
+	if !ok || params.TextDocument.Version <= current.version {
+		return document{}, false
 	}
-	text, ok := applyChanges(document.text, params.ContentChanges)
+	text, ok := applyChanges(current.text, params.ContentChanges)
 	if !ok {
-		return
+		return document{}, false
 	}
-	document.version = params.TextDocument.Version
-	document.text = text
-	s.documents[params.TextDocument.URI] = document
+	current.version = params.TextDocument.Version
+	current.text = text
+	s.documents[params.TextDocument.URI] = current
+	return current, true
 }
 
-func (s *documentStore) close(identifier protocol.TextDocumentIdentifier) {
+func (s *documentStore) close(identifier protocol.TextDocumentIdentifier) bool {
 	if !isFileURI(identifier.URI) {
-		return
+		return false
 	}
+	_, ok := s.documents[identifier.URI]
 	delete(s.documents, identifier.URI)
+	return ok
 }
 
 func (s *documentStore) document(uri string) (document, bool) {
@@ -87,21 +92,22 @@ func applyChanges(text string, changes []protocol.TextDocumentContentChangeEvent
 		return "", false
 	}
 	for _, change := range changes {
-		if change.Range == nil {
-			return "", false
-		}
-		start, ok := utf16Offset(text, change.Range.Start)
+		partial, ok := change.TextDocumentContentChangePartial()
 		if !ok {
 			return "", false
 		}
-		end, ok := utf16Offset(text, change.Range.End)
+		start, ok := utf16Offset(text, partial.Range.Start)
+		if !ok {
+			return "", false
+		}
+		end, ok := utf16Offset(text, partial.Range.End)
 		if !ok || end < start {
 			return "", false
 		}
-		if change.RangeLength != nil && utf16Length(text[start:end]) != *change.RangeLength {
+		if rangeLength, ok := partial.RangeLength.Value(); ok && utf16Length(text[start:end]) != rangeLength {
 			return "", false
 		}
-		text = text[:start] + change.Text + text[end:]
+		text = text[:start] + partial.Text + text[end:]
 	}
 	return text, true
 }
@@ -116,6 +122,9 @@ func utf16Offset(text string, position protocol.Position) (int, bool) {
 		}
 		lineStart = nextLineStart
 		line++
+	}
+	if position.Character == 0 {
+		return lineStart, true
 	}
 	lineEnd := lineStart
 	for lineEnd < len(text) && text[lineEnd] != '\n' && text[lineEnd] != '\r' {
@@ -145,6 +154,9 @@ func utf16Offset(text string, position protocol.Position) (int, bool) {
 }
 
 func nextLineStart(text string, start int) (int, bool) {
+	if start >= len(text) {
+		return start, true
+	}
 	for offset := start; offset < len(text); {
 		switch text[offset] {
 		case '\n':

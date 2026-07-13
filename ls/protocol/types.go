@@ -18,12 +18,7 @@ package protocol
 
 import "encoding/json"
 
-const (
-	TextDocumentSyncNone        = 0
-	TextDocumentSyncFull        = 1
-	TextDocumentSyncIncremental = 2
-)
-
+// Message is the generic JSON-RPC message envelope.
 type Message struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      json.RawMessage `json:"id,omitempty"`
@@ -32,74 +27,18 @@ type Message struct {
 	Result  json.RawMessage `json:"result,omitempty"`
 }
 
+// Response is a JSON-RPC response payload.
 type Response struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      json.RawMessage `json:"id"`
 	Result  any             `json:"result"`
 }
 
-type InitializeParams struct{}
-
-type InitializeResult struct {
-	Capabilities ServerCapabilities `json:"capabilities"`
-}
-
-type ServerCapabilities struct {
-	TextDocumentSync TextDocumentSyncOptions `json:"textDocumentSync"`
-}
-
-type TextDocumentSyncOptions struct {
-	OpenClose bool `json:"openClose"`
-	Change    int  `json:"change"`
-	Save      bool `json:"save"`
-}
-
-type Position struct {
-	Line      uint32 `json:"line"`
-	Character uint32 `json:"character"`
-}
-
-type Range struct {
-	Start Position `json:"start"`
-	End   Position `json:"end"`
-}
-
-type TextDocumentIdentifier struct {
-	URI string `json:"uri"`
-}
-
-type VersionedTextDocumentIdentifier struct {
-	TextDocumentIdentifier
-	Version int32 `json:"version"`
-}
-
-type TextDocumentItem struct {
-	URI        string `json:"uri"`
-	LanguageID string `json:"languageId"`
-	Version    int32  `json:"version"`
-	Text       string `json:"text"`
-}
-
-type TextDocumentContentChangeEvent struct {
-	Range       *Range  `json:"range,omitempty"`
-	RangeLength *uint32 `json:"rangeLength,omitempty"`
-	Text        string  `json:"text"`
-}
-
-type DidOpenTextDocumentParams struct {
-	TextDocument TextDocumentItem `json:"textDocument"`
-}
-
-type DidChangeTextDocumentParams struct {
-	TextDocument   VersionedTextDocumentIdentifier  `json:"textDocument"`
-	ContentChanges []TextDocumentContentChangeEvent `json:"contentChanges"`
-}
-
-type DidCloseTextDocumentParams struct {
-	TextDocument TextDocumentIdentifier `json:"textDocument"`
-}
-
-type DidSaveTextDocumentParams struct {
-	TextDocument TextDocumentIdentifier `json:"textDocument"`
-	Text         *string                `json:"text,omitempty"`
+// Notification is the generic JSON-RPC notification envelope used to send
+// notifications from the server to the client. The Params field carries the
+// notification-specific payload as an arbitrary value.
+type Notification struct {
+	JSONRPC string `json:"jsonrpc"`
+	Method  string `json:"method"`
+	Params  any    `json:"params"`
 }
