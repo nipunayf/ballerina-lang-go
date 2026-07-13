@@ -86,6 +86,10 @@ Stages 5–10 then run concurrently per module, with no cross-module dependencie
 - `@error`: -e test cases should use error markers to indicate lines where an error is expect. Text after marker is purely for commenting, not validated against actual error.
 - `@panic`: -p test cases should use panic markers to indicate first line which triggers a panic. We validate it is the first line the stack trace. Similar to error markers text after marker is ignored.
 
+## Language server (ls/)
+
+- LS-specific conventions (package roles, UTF-16 positions, golden-JSON fixture tests) live in `ls/AGENTS.md`; read it before touching anything under `ls/`. LS work follows the iteration loop in the `ls-iteration` skill.
+
 ## Commands
 
 - You can run interpreter as `go run ./cli/cmd run [flags] <path to bal file>`
