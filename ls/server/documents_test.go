@@ -18,7 +18,6 @@ package server
 
 import (
 	"testing"
-
 	"ballerina-lang-go/ls/protocol"
 )
 
