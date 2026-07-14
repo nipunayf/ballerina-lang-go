@@ -26,6 +26,7 @@ package pal
 import (
 	"context"
 	"io"
+	"io/fs"
 	"time"
 )
 
@@ -62,6 +63,9 @@ type (
 		ReadFile   func(path string) ([]byte, error)
 		WriteFile  func(path string, data []byte) error
 		AppendFile func(path string, data []byte) error
+		Stat       func(path string) (fs.FileInfo, error)
+		ReadDir    func(path string) ([]fs.DirEntry, error)
+		MkdirAll   func(path string, perm fs.FileMode) error
 	}
 	Time struct {
 		Now          func() time.Time

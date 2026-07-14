@@ -132,6 +132,8 @@ func (s *Server) handleNotification(message protocol.Message) error {
 		notification = s.handleDidClose(message.Params)
 	case "textDocument/didSave":
 		return nil
+	case "workspace/didChangeWatchedFiles":
+		return s.handleDidChangeWatchedFiles(message.Params)
 	default:
 		return nil
 	}
@@ -161,8 +163,7 @@ func (s *Server) handleDidOpen(params json.RawMessage) *protocol.Notification {
 		return nil
 	}
 	result, err := s.compiler.Compile(context.Background(), compile.CompileRequest{
-		URI:  docURI,
-		Text: snapshot.Text,
+		URI: docURI,
 	})
 	if err != nil {
 		return nil
@@ -199,8 +200,7 @@ func (s *Server) handleDidChange(params json.RawMessage) *protocol.Notification 
 		return nil
 	}
 	result, err := s.compiler.Compile(context.Background(), compile.CompileRequest{
-		URI:  docURI,
-		Text: snapshot.Text,
+		URI: docURI,
 	})
 	if err != nil {
 		return nil
@@ -239,4 +239,36 @@ func (s *Server) publishDiagnostics(uri string, version int32, includeVersion bo
 		Method:  publishDiagnosticsMethod,
 		Params:  params,
 	}
+}
+
+// handleDidChangeWatchedFiles routes workspace/didChangeWatchedFiles to the
+// project service. Only file: URIs are admitted — non-file: events are ignored,
+// matching the file:-only routing of 08. Watched-file notifications produce no
+// direct publishDiagnostics in 08; diagnostics flow on the next didOpen/didChange.
+func (s *Server) handleDidChangeWatchedFiles(params json.RawMessage) error {
+	var didChange protocol.DidChangeWatchedFilesParams
+	if json.Unmarshal(params, &didChange) != nil {
+		return nil
+	}
+	for _, fileEvent := range didChange.Changes {
+		docURI, err := uri.NewFileURI(fileEvent.URI)
+		if err != nil {
+			continue
+		}
+		change := workspace.WatchedFileChange{URI: docURI}
+		switch fileEvent.Type {
+		case protocol.FileChangeTypeCreated:
+			change.Kind = workspace.WatchedFileCreate
+		case protocol.FileChangeTypeDeleted:
+			change.Kind = workspace.WatchedFileDelete
+		case protocol.FileChangeTypeChanged:
+			change.Kind = workspace.WatchedFileModified
+		default:
+			continue
+		}
+		if err := s.projects.ApplyWatchedFile(context.Background(), change); err != nil {
+			continue
+		}
+	}
+	return nil
 }

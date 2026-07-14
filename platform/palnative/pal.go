@@ -59,6 +59,9 @@ func NewPlatform() (pal.Platform, func()) {
 				_, err = f.Write(data)
 				return err
 			},
+			Stat:     os.Stat,
+			ReadDir:  os.ReadDir,
+			MkdirAll: os.MkdirAll,
 		},
 		Time: pal.Time{
 			Now:          time.Now,

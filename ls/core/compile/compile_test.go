@@ -1,7 +1,7 @@
 // Copyright (c) 2026, WSO2 LLC. (http://www.wso2.com).
 //
 // WSO2 LLC. licenses this file to you under the Apache License,
-// Version 2.0 (the "License"); you may not use this file except
+// Version 2.0 ( the "License"); you may not use this file except
 // in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -20,12 +20,18 @@ import (
 	"context"
 	"testing"
 
+	"ballerina-lang-go/ls/core/event"
 	"ballerina-lang-go/ls/core/uri"
-	"ballerina-lang-go/platform/pal"
+	"ballerina-lang-go/ls/core/workspace"
+	"ballerina-lang-go/platform/palnative"
 )
 
-func newTestCompilationService() *CompilationService {
-	return New(pal.Platform{})
+func newTestServices(t *testing.T) (*workspace.ProjectService, *CompilationService) {
+	t.Helper()
+	platform, _ := palnative.NewPlatform()
+	bus := event.New()
+	projects := workspace.New(platform, bus)
+	return projects, New(projects, bus)
 }
 
 func fileURI(t *testing.T, raw string) uri.DocumentURI {
@@ -37,13 +43,22 @@ func fileURI(t *testing.T, raw string) uri.DocumentURI {
 	return u
 }
 
+// applyOpen publishes content through the workspace (fresh palFS + Load) so
+// Compile reads the published CurrentPackage.
+func applyOpen(t *testing.T, projects *workspace.ProjectService, u uri.DocumentURI, text string) {
+	t.Helper()
+	if _, err := projects.Apply(context.Background(), workspace.DocumentChange{
+		Kind: workspace.ChangeOpen, URI: u, Text: text, Version: 1, LanguageID: "ballerina",
+	}); err != nil {
+		t.Fatalf("Apply open: %v", err)
+	}
+}
+
 func TestCompileReturnsDiagnosticsForErrorSource(t *testing.T) {
-	svc := newTestCompilationService()
+	projects, svc := newTestServices(t)
 	u := fileURI(t, "file:///workspace/main.bal")
-	result, err := svc.Compile(context.Background(), CompileRequest{
-		URI:  u,
-		Text: "public function main() {\n    int x = 1;\n}\n",
-	})
+	applyOpen(t, projects, u, "public function main() {\n    int x = 1;\n}\n")
+	result, err := svc.Compile(context.Background(), CompileRequest{URI: u})
 	if err != nil {
 		t.Fatalf("Compile: %v", err)
 	}
@@ -60,7 +75,6 @@ func TestCompileReturnsDiagnosticsForErrorSource(t *testing.T) {
 	if diag.Message == "" {
 		t.Error("message is empty")
 	}
-	// Line 1, char 4 (byte offsets, matching the original byteOffsetToPosition line/char)
 	if diag.StartLine != 1 || diag.StartChar != 4 {
 		t.Errorf("start = line %d char %d, want line 1 char 4", diag.StartLine, diag.StartChar)
 	}
@@ -70,12 +84,22 @@ func TestCompileReturnsDiagnosticsForErrorSource(t *testing.T) {
 }
 
 func TestCompileReturnsNoDiagnosticsForValidSource(t *testing.T) {
-	svc := newTestCompilationService()
+	projects, svc := newTestServices(t)
 	u := fileURI(t, "file:///workspace/main.bal")
-	result, err := svc.Compile(context.Background(), CompileRequest{
-		URI:  u,
-		Text: "public function main() {}\n",
-	})
+	applyOpen(t, projects, u, "public function main() {}\n")
+	result, err := svc.Compile(context.Background(), CompileRequest{URI: u})
+	if err != nil {
+		t.Fatalf("Compile: %v", err)
+	}
+	if len(result.Diagnostics) != 0 {
+		t.Fatalf("diagnostics = %d, want 0", len(result.Diagnostics))
+	}
+}
+
+func TestCompileUnknownRootReturnsEmpty(t *testing.T) {
+	_, svc := newTestServices(t)
+	u := fileURI(t, "file:///workspace/never-opened.bal")
+	result, err := svc.Compile(context.Background(), CompileRequest{URI: u})
 	if err != nil {
 		t.Fatalf("Compile: %v", err)
 	}

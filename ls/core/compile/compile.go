@@ -1,7 +1,7 @@
 // Copyright (c) 2026, WSO2 LLC. (http://www.wso2.com).
 //
 // WSO2 LLC. licenses this file to you under the Apache License,
-// Version 2.0 (the "License"); you may not use this file except
+// Version 2.0 ( the "License"); you may not use this file except
 // in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -14,36 +14,35 @@
 // specific language governing permissions and limitations
 // under the License.
 
-// Package compile provides CompilationService, the core service that wraps
-// the compiler pipeline (projects.Load → DiagnosticResult) and returns
-// core-defined CompilerDiagnostic values with byte-offset-derived positions.
-// The server converts CompilerDiagnostic to protocol.Diagnostic at the
-// boundary, including UTF-16 position conversion and severity mapping.
+// Package compile provides CompilationService, the core service that reads
+// the published CurrentPackage of a resolved project (via a direct
+// *workspace.ProjectService reference) and returns core-defined
+// CompilerDiagnostic values with byte-offset-derived positions. The server
+// converts CompilerDiagnostic to protocol.Diagnostic at the boundary,
+// including UTF-16 position conversion and severity mapping.
 //
-// The overlayFS synthetic filesystem is a private implementation detail of
-// this package — it is compilation infrastructure, not server logic. Ticket 08
-// replaces it with real workspace management.
+// Ticket 08 retires the Phase-A private overlayFS: loading moved to the
+// workspace, and Compile reads the already-published package rather than
+// constructing a synthetic filesystem. Content authority moved from
+// CompileRequest.Text to the published CurrentPackage(). CompilationService
+// subscribes to the event bus to maintain a known-roots set so it does not
+// attempt to compile for a source root that has been evicted.
 package compile
 
 import (
 	"context"
-	"io"
-	"io/fs"
-	"path"
-	"time"
+	"sync"
 
+	"ballerina-lang-go/ls/core/event"
 	"ballerina-lang-go/ls/core/uri"
-	"ballerina-lang-go/platform/pal"
-	"ballerina-lang-go/projects"
+	"ballerina-lang-go/ls/core/workspace"
 	"ballerina-lang-go/tools/diagnostics"
 )
 
-// CompileRequest carries the document URI and full text to compile. The
-// server resolves protocol.TextEdit ranges to full Text before calling
-// Compile, keeping this package protocol-free.
+// CompileRequest carries the document URI to compile. Content authority moved
+// to the published CurrentPackage; the former Text field is removed.
 type CompileRequest struct {
-	URI  uri.DocumentURI
-	Text string
+	URI uri.DocumentURI
 }
 
 // CompileResult holds the core-defined diagnostics from a compilation.
@@ -77,35 +76,99 @@ type CompilerDiagnostic struct {
 	Message   string
 }
 
-// CompilationService wraps the compiler pipeline. It is constructed with a
-// PAL platform to avoid a future constructor change.
+// CompilationService reads the published CurrentPackage of a resolved project
+// and compiles it. It holds a direct *ProjectService reference (the Java
+// CompilationActionImpl(projectService) shape) and subscribes to the event bus
+// to maintain a known-roots set.
 type CompilationService struct {
-	platform pal.Platform
+	projects   *workspace.ProjectService
+	bus        *event.Bus
+	mu         sync.Mutex
+	knownRoots map[string]struct{}
 }
 
-// New creates a CompilationService wired to the given PAL platform.
-func New(platform pal.Platform) *CompilationService {
-	return &CompilationService{platform: platform}
+// New creates a CompilationService wired to the project service (direct read
+// reference) and the event bus. It subscribes to ProjectRegistered/
+// ProjectEvicted/ProjectKindTransitioned to maintain the known-roots set.
+func New(projects *workspace.ProjectService, bus *event.Bus) *CompilationService {
+	svc := &CompilationService{
+		projects:   projects,
+		bus:        bus,
+		knownRoots: make(map[string]struct{}),
+	}
+	if bus != nil {
+		bus.Subscribe([]event.Kind{
+			event.ProjectRegistered,
+			event.ProjectEvicted,
+			event.ProjectKindTransitioned,
+		}, svc.handleEvent)
+	}
+	return svc
 }
 
-// Compile carries the exact logic from the former compileOverlayDiagnostics:
-// it constructs an overlayFS from the document text, calls projects.Load,
-// iterates the compilation's DiagnosticResult, and maps each
-// diagnostics.Diagnostic to a CompilerDiagnostic with byte-offset-derived
-// positions. context.Context is threaded for ADR-018 cancellation ownership,
-// even though Phase A's calls are synchronous.
+// handleEvent updates the known-roots set in response to lifecycle events.
+func (s *CompilationService) handleEvent(e event.Event) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	switch e.Kind() {
+	case event.ProjectRegistered:
+		s.knownRoots[e.SourceRoot()] = struct{}{}
+	case event.ProjectEvicted:
+		delete(s.knownRoots, e.SourceRoot())
+	case event.ProjectKindTransitioned:
+		if te, ok := e.(event.ProjectKindTransitionedEvent); ok {
+			delete(s.knownRoots, te.OldRoot())
+		}
+		s.knownRoots[e.SourceRoot()] = struct{}{}
+	}
+}
+
+// isKnown reports whether the source root has an active project.
+func (s *CompilationService) isKnown(root string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.knownRoots[root]
+	return ok
+}
+
+// Compile resolves the project via the direct ProjectService reference, reads
+// the published CurrentPackage, and compiles it. The document text used for
+// computeLineStarts is read from the published package — the same text Apply
+// published — so diagnostics and positions are identical to the workspace's
+// view. If the source root is unknown (evicted between Apply and Compile),
+// Compile returns an empty result. context.Context is threaded for ADR-018
+// cancellation ownership, even though Phase B's calls are synchronous.
 func (s *CompilationService) Compile(ctx context.Context, req CompileRequest) (CompileResult, error) {
 	_ = ctx
-	_ = s.platform
-
-	fileName := path.Base(req.URI.Path())
-	result, err := projects.Load(overlayFS{name: fileName, content: []byte(req.Text)}, fileName)
-	if err != nil {
+	project, err := s.projects.Project(req.URI)
+	if err != nil || project == nil {
 		return CompileResult{}, nil
 	}
-	compilation := result.Project().CurrentPackage().Compilation()
+	if !s.isKnown(project.SourceRoot()) {
+		return CompileResult{}, nil
+	}
+	pkg := project.CurrentPackage()
+	if pkg == nil {
+		return CompileResult{}, nil
+	}
+	docID, ok := project.DocumentID(req.URI.Path())
+	if !ok {
+		return CompileResult{}, nil
+	}
+	module := pkg.Module(docID.ModuleID())
+	if module == nil {
+		return CompileResult{}, nil
+	}
+	doc := module.Document(docID)
+	if doc == nil {
+		return CompileResult{}, nil
+	}
+	text := doc.TextDocument().String()
+	fileName := req.URI.Path()
+
+	compilation := pkg.Compilation()
 	env := compilation.DiagnosticEnv()
-	lineStarts := computeLineStarts(req.Text)
+	lineStarts := computeLineStarts(text)
 
 	var diags []CompilerDiagnostic
 	for _, diag := range compilation.DiagnosticResult().Diagnostics() {
@@ -116,11 +179,11 @@ func (s *CompilationService) Compile(ctx context.Context, req CompileRequest) (C
 		if env.FileName(location) != fileName {
 			continue
 		}
-		startLine, startChar, ok := byteOffsetToLineChar(req.Text, lineStarts, location.StartOffset())
+		startLine, startChar, ok := byteOffsetToLineChar(text, lineStarts, location.StartOffset())
 		if !ok {
 			continue
 		}
-		endLine, endChar, ok := byteOffsetToLineChar(req.Text, lineStarts, location.EndOffset())
+		endLine, endChar, ok := byteOffsetToLineChar(text, lineStarts, location.EndOffset())
 		if !ok {
 			continue
 		}
@@ -207,87 +270,4 @@ func computeLineStarts(text string) []int {
 		}
 	}
 	return starts
-}
-
-type overlayFS struct {
-	name    string
-	content []byte
-}
-
-func (f overlayFS) Open(name string) (fs.File, error) {
-	if name != f.name {
-		return nil, fs.ErrNotExist
-	}
-	return overlayFile{info: f.fileInfo(), reader: newBytesReader(f.content)}, nil
-}
-
-func (f overlayFS) Stat(name string) (fs.FileInfo, error) {
-	if name != f.name {
-		return nil, fs.ErrNotExist
-	}
-	return f.fileInfo(), nil
-}
-
-func (f overlayFS) ReadFile(name string) ([]byte, error) {
-	if name != f.name {
-		return nil, fs.ErrNotExist
-	}
-	return f.content, nil
-}
-
-func (f overlayFS) ReadDir(name string) ([]fs.DirEntry, error) {
-	if name == "." {
-		return []fs.DirEntry{overlayDirEntry{info: f.fileInfo()}}, nil
-	}
-	return nil, fs.ErrNotExist
-}
-
-func (f overlayFS) fileInfo() overlayFileInfo {
-	return overlayFileInfo{name: f.name, size: int64(len(f.content))}
-}
-
-type overlayFileInfo struct {
-	name string
-	size int64
-}
-
-func (info overlayFileInfo) Name() string       { return info.name }
-func (info overlayFileInfo) Size() int64        { return info.size }
-func (info overlayFileInfo) Mode() fs.FileMode  { return 0o444 }
-func (info overlayFileInfo) ModTime() time.Time { return time.Time{} }
-func (info overlayFileInfo) IsDir() bool        { return false }
-func (info overlayFileInfo) Sys() any           { return nil }
-
-type overlayDirEntry struct {
-	info overlayFileInfo
-}
-
-func (entry overlayDirEntry) Name() string               { return entry.info.name }
-func (entry overlayDirEntry) IsDir() bool                { return false }
-func (entry overlayDirEntry) Type() fs.FileMode          { return 0 }
-func (entry overlayDirEntry) Info() (fs.FileInfo, error) { return entry.info, nil }
-
-type overlayFile struct {
-	info   overlayFileInfo
-	reader *bytesReader
-}
-
-func (f overlayFile) Stat() (fs.FileInfo, error) { return f.info, nil }
-func (f overlayFile) Read(p []byte) (int, error) { return f.reader.read(p) }
-func (f overlayFile) Close() error               { return nil }
-
-type bytesReader struct {
-	data []byte
-	off  int
-}
-
-func newBytesReader(data []byte) *bytesReader { return &bytesReader{data: data} }
-
-func (r *bytesReader) read(p []byte) (int, error) {
-	if r.off >= len(r.data) {
-		return 0, io.EOF
-	}
-	n := copy(p, r.data[r.off:])
-	r.off += n
-	return n, nil
 }

@@ -20,13 +20,14 @@ import (
 	"context"
 	"testing"
 
+	"ballerina-lang-go/ls/core/event"
 	"ballerina-lang-go/ls/core/uri"
 	"ballerina-lang-go/platform/palnative"
 )
 
 func newTestProjectService() *ProjectService {
 	platform, _ := palnative.NewPlatform()
-	return New(platform)
+	return New(platform, event.New())
 }
 
 func fileURI(t *testing.T, raw string) uri.DocumentURI {

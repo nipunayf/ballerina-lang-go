@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"ballerina-lang-go/ls/core/compile"
+	"ballerina-lang-go/ls/core/event"
 	"ballerina-lang-go/ls/core/workspace"
 	"ballerina-lang-go/ls/protocol"
 	"ballerina-lang-go/platform/palnative"
@@ -31,7 +32,9 @@ import (
 
 func newCoreServices() (*workspace.ProjectService, *compile.CompilationService) {
 	platform, _ := palnative.NewPlatform()
-	return workspace.New(platform), compile.New(platform)
+	bus := event.New()
+	projects := workspace.New(platform, bus)
+	return projects, compile.New(projects, bus)
 }
 
 type pipeTransport struct {
