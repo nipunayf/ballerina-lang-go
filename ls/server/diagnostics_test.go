@@ -23,8 +23,16 @@ import (
 	"testing"
 	"time"
 
+	"ballerina-lang-go/ls/core/compile"
+	"ballerina-lang-go/ls/core/workspace"
 	"ballerina-lang-go/ls/protocol"
+	"ballerina-lang-go/platform/palnative"
 )
+
+func newCoreServices() (*workspace.ProjectService, *compile.CompilationService) {
+	platform, _ := palnative.NewPlatform()
+	return workspace.New(platform), compile.New(platform)
+}
 
 type pipeTransport struct {
 	reader io.Reader
@@ -47,9 +55,10 @@ func newTestSession(t *testing.T, versionSupport bool) *testSession {
 	serverRead, clientWrite := io.Pipe()
 	clientRead, serverWrite := io.Pipe()
 	transport := pipeTransport{reader: serverRead, writer: serverWrite}
+	projects, compiler := newCoreServices()
 	session := &testSession{
 		t:       t,
-		server:  New(transport),
+		server:  New(transport, projects, compiler),
 		clientW: clientWrite,
 		clientR: bufio.NewReader(clientRead),
 		done:    make(chan error, 1),
@@ -285,7 +294,8 @@ func TestPublishDiagnosticsTransportErrorReachesServe(t *testing.T) {
 	serverRead, clientWrite := io.Pipe()
 	clientRead, serverWrite := io.Pipe()
 	transport := pipeTransport{reader: serverRead, writer: serverWrite}
-	server := New(transport)
+	projects, compiler := newCoreServices()
+	server := New(transport, projects, compiler)
 	done := make(chan error, 1)
 	go func() { done <- server.Serve() }()
 

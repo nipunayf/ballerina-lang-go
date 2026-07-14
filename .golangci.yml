@@ -17,6 +17,12 @@ linters:
               desc: "test_util is test-only; import only from *_test.go"
             - pkg: "ballerina-lang-go/test_util/testphases"
               desc: "test_util/testphases is test-only; import only from *_test.go"
+        protocol-stdlib-only:
+          files:
+            - "**/ls/protocol/*.go"
+          deny:
+            - pkg: "ballerina-lang-go"
+              desc: "ls/protocol must import only the Go standard library — no compiler-package imports"
     staticcheck:
       checks:
         # Default

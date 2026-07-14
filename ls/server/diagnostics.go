@@ -17,118 +17,64 @@
 package server
 
 import (
-	"io"
-	"io/fs"
-	"net/url"
-	"path"
-	"time"
-
+	"ballerina-lang-go/ls/core/compile"
 	"ballerina-lang-go/ls/protocol"
-	"ballerina-lang-go/projects"
-	"ballerina-lang-go/tools/diagnostics"
 )
 
 const diagnosticSource = "ballerina"
 
-func compileOverlayDiagnostics(uri string, text string) []protocol.Diagnostic {
-	fileName, ok := overlayFileName(uri)
-	if !ok {
-		return nil
-	}
-	result, err := projects.Load(overlayFS{name: fileName, content: []byte(text)}, fileName)
-	if err != nil {
-		return nil
-	}
-	compilation := result.Project().CurrentPackage().Compilation()
-	env := compilation.DiagnosticEnv()
-	lineStarts := computeLineStarts(text)
+// UTF-16 boundary: The helpers below convert core CompilerDiagnostic values
+// (byte-offset-derived positions) to protocol.Diagnostic with UTF-16 character
+// positions. Core must not import ls/protocol; the conversion stays here.
 
-	var converted []protocol.Diagnostic
-	for _, diag := range compilation.DiagnosticResult().Diagnostics() {
-		location := diag.Location()
-		if !diagnostics.LocationHasSource(location) {
-			continue
-		}
-		if env.FileName(location) != fileName {
-			continue
-		}
-		start, ok := byteOffsetToPosition(text, lineStarts, location.StartOffset())
-		if !ok {
-			continue
-		}
-		end, ok := byteOffsetToPosition(text, lineStarts, location.EndOffset())
-		if !ok {
-			continue
-		}
+func convertDiagnostics(diags []compile.CompilerDiagnostic, text string) []protocol.Diagnostic {
+	if len(diags) == 0 {
+		return nil
+	}
+	lineStarts := computeLineStarts(text)
+	converted := make([]protocol.Diagnostic, 0, len(diags))
+	for _, diag := range diags {
+		start := lineCharToUTF16Position(text, lineStarts, diag.StartLine, diag.StartChar)
+		end := lineCharToUTF16Position(text, lineStarts, diag.EndLine, diag.EndChar)
 		converted = append(converted, protocol.Diagnostic{
 			Range:    protocol.Range{Start: start, End: end},
-			Severity: protocol.NewOptional(toLSPSeverity(diag.DiagnosticInfo().Severity())),
-			Code:     protocol.NewOptional(protocol.NewOrDiagnosticCodeString(diag.DiagnosticInfo().Code())),
+			Severity: protocol.NewOptional(toLSPSeverity(diag.Severity)),
+			Code:     protocol.NewOptional(protocol.NewOrDiagnosticCodeString(diag.Code)),
 			Source:   protocol.NewOptional(diagnosticSource),
-			Message:  protocol.NewOrDiagnosticMessageString(diag.Message()),
+			Message:  protocol.NewOrDiagnosticMessageString(diag.Message),
 		})
 	}
 	return converted
 }
 
-func toLSPSeverity(severity diagnostics.DiagnosticSeverity) protocol.DiagnosticSeverity {
+func toLSPSeverity(severity compile.Severity) protocol.DiagnosticSeverity {
 	switch severity {
-	case diagnostics.Error, diagnostics.Fatal:
+	case compile.SeverityError:
 		return protocol.DiagnosticSeverityError
-	case diagnostics.Warning:
+	case compile.SeverityWarning:
 		return protocol.DiagnosticSeverityWarning
-	case diagnostics.Info:
+	case compile.SeverityInformation:
 		return protocol.DiagnosticSeverityInformation
-	case diagnostics.Hint:
+	case compile.SeverityHint:
 		return protocol.DiagnosticSeverityHint
 	default:
 		return protocol.DiagnosticSeverityError
 	}
 }
 
-func overlayFileName(uri string) (string, bool) {
-	parsed, err := url.Parse(uri)
-	if err != nil || parsed.Scheme != "file" {
-		return "", false
+func lineCharToUTF16Position(text string, lineStarts []int, line uint32, byteChar uint32) protocol.Position {
+	if int(line) >= len(lineStarts) {
+		return protocol.Position{Line: line, Character: byteChar}
 	}
-	return path.Base(parsed.Path), true
-}
-
-func byteOffsetToPosition(text string, lineStarts []int, offset int) (protocol.Position, bool) {
-	if offset < 0 || offset > len(text) {
-		return protocol.Position{}, false
-	}
-	line := findLine(lineStarts, offset)
 	lineStart := lineStarts[line]
-	contentEnd := lineContentEnd(text, lineStart)
-	column := offset - lineStart
-	if column > contentEnd-lineStart {
-		column = contentEnd - lineStart
-	}
-	if column < 0 {
-		column = 0
+	end := lineStart + int(byteChar)
+	if end > len(text) {
+		end = len(text)
 	}
 	return protocol.Position{
-		Line:      uint32(line),
-		Character: utf16CodeUnits(text[lineStart : lineStart+column]),
-	}, true
-}
-
-func findLine(lineStarts []int, offset int) int {
-	for i := len(lineStarts) - 1; i >= 0; i-- {
-		if offset >= lineStarts[i] {
-			return i
-		}
+		Line:      line,
+		Character: utf16CodeUnits(text[lineStart:end]),
 	}
-	return 0
-}
-
-func lineContentEnd(text string, lineStart int) int {
-	end := lineStart
-	for end < len(text) && text[end] != '\r' && text[end] != '\n' {
-		end++
-	}
-	return end
 }
 
 func computeLineStarts(text string) []int {
@@ -162,87 +108,4 @@ func utf16CodeUnits(s string) uint32 {
 		}
 	}
 	return count
-}
-
-type overlayFS struct {
-	name    string
-	content []byte
-}
-
-func (f overlayFS) Open(name string) (fs.File, error) {
-	if name != f.name {
-		return nil, fs.ErrNotExist
-	}
-	return overlayFile{info: f.fileInfo(), reader: newBytesReader(f.content)}, nil
-}
-
-func (f overlayFS) Stat(name string) (fs.FileInfo, error) {
-	if name != f.name {
-		return nil, fs.ErrNotExist
-	}
-	return f.fileInfo(), nil
-}
-
-func (f overlayFS) ReadFile(name string) ([]byte, error) {
-	if name != f.name {
-		return nil, fs.ErrNotExist
-	}
-	return f.content, nil
-}
-
-func (f overlayFS) ReadDir(name string) ([]fs.DirEntry, error) {
-	if name == "." {
-		return []fs.DirEntry{overlayDirEntry{info: f.fileInfo()}}, nil
-	}
-	return nil, fs.ErrNotExist
-}
-
-func (f overlayFS) fileInfo() overlayFileInfo {
-	return overlayFileInfo{name: f.name, size: int64(len(f.content))}
-}
-
-type overlayFileInfo struct {
-	name string
-	size int64
-}
-
-func (info overlayFileInfo) Name() string      { return info.name }
-func (info overlayFileInfo) Size() int64       { return info.size }
-func (info overlayFileInfo) Mode() fs.FileMode { return 0o444 }
-func (info overlayFileInfo) ModTime() time.Time { return time.Time{} }
-func (info overlayFileInfo) IsDir() bool        { return false }
-func (info overlayFileInfo) Sys() any          { return nil }
-
-type overlayDirEntry struct {
-	info overlayFileInfo
-}
-
-func (entry overlayDirEntry) Name() string               { return entry.info.name }
-func (entry overlayDirEntry) IsDir() bool                 { return false }
-func (entry overlayDirEntry) Type() fs.FileMode          { return 0 }
-func (entry overlayDirEntry) Info() (fs.FileInfo, error) { return entry.info, nil }
-
-type overlayFile struct {
-	info   overlayFileInfo
-	reader *bytesReader
-}
-
-func (f overlayFile) Stat() (fs.FileInfo, error) { return f.info, nil }
-func (f overlayFile) Read(p []byte) (int, error) { return f.reader.read(p) }
-func (f overlayFile) Close() error               { return nil }
-
-type bytesReader struct {
-	data []byte
-	off  int
-}
-
-func newBytesReader(data []byte) *bytesReader { return &bytesReader{data: data} }
-
-func (r *bytesReader) read(p []byte) (int, error) {
-	if r.off >= len(r.data) {
-		return 0, io.EOF
-	}
-	n := copy(p, r.data[r.off:])
-	r.off += n
-	return n, nil
 }

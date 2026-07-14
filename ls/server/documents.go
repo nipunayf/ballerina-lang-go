@@ -17,75 +17,16 @@
 package server
 
 import (
-	"net/url"
 	"unicode/utf8"
 
 	"ballerina-lang-go/ls/protocol"
 )
 
-type documentStore struct {
-	documents map[string]document
-}
-
-type document struct {
-	languageID protocol.LanguageKind
-	version    int32
-	text       string
-}
-
-func newDocumentStore() *documentStore {
-	return &documentStore{documents: make(map[string]document)}
-}
-
-func (s *documentStore) open(item protocol.TextDocumentItem) (document, bool) {
-	if !isFileURI(item.URI) {
-		return document{}, false
-	}
-	doc := document{
-		languageID: item.LanguageID,
-		version:    item.Version,
-		text:       item.Text,
-	}
-	s.documents[item.URI] = doc
-	return doc, true
-}
-
-func (s *documentStore) change(params protocol.DidChangeTextDocumentParams) (document, bool) {
-	if !isFileURI(params.TextDocument.URI) {
-		return document{}, false
-	}
-	current, ok := s.documents[params.TextDocument.URI]
-	if !ok || params.TextDocument.Version <= current.version {
-		return document{}, false
-	}
-	text, ok := applyChanges(current.text, params.ContentChanges)
-	if !ok {
-		return document{}, false
-	}
-	current.version = params.TextDocument.Version
-	current.text = text
-	s.documents[params.TextDocument.URI] = current
-	return current, true
-}
-
-func (s *documentStore) close(identifier protocol.TextDocumentIdentifier) bool {
-	if !isFileURI(identifier.URI) {
-		return false
-	}
-	_, ok := s.documents[identifier.URI]
-	delete(s.documents, identifier.URI)
-	return ok
-}
-
-func (s *documentStore) document(uri string) (document, bool) {
-	document, ok := s.documents[uri]
-	return document, ok
-}
-
-func isFileURI(uri string) bool {
-	parsed, err := url.Parse(uri)
-	return err == nil && parsed.Scheme == "file"
-}
+// UTF-16 boundary: The helpers below resolve protocol.TextEdit ranges
+// (UTF-16 code-unit positions) to byte offsets in the full text. The server
+// does this before calling workspace.Apply with resolved full text, keeping
+// ls/core protocol-free. These helpers stay in ls/server per the core-service
+// seam design; they move into core only at ticket 10 cutover if warranted.
 
 func applyChanges(text string, changes []protocol.TextDocumentContentChangeEvent) (string, bool) {
 	if len(changes) == 0 {

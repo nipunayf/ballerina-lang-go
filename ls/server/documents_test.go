@@ -22,106 +22,46 @@ import (
 	"ballerina-lang-go/ls/protocol"
 )
 
-func TestDocumentStoreAppliesUTF16Changes(t *testing.T) {
-	store := newDocumentStore()
-	store.open(protocol.TextDocumentItem{
-		URI:     "file:///workspace/main.bal",
-		Version: 1,
-		Text:    "😀x\n",
+func TestApplyChangesUTF16(t *testing.T) {
+	result, ok := applyChanges("😀x\n", []protocol.TextDocumentContentChangeEvent{
+		protocol.NewTextDocumentContentChangeEventTextDocumentContentChangePartial(protocol.TextDocumentContentChangePartial{
+			Range: protocol.Range{
+				Start: protocol.Position{Line: 0, Character: 2},
+				End:   protocol.Position{Line: 0, Character: 3},
+			},
+			Text: "y",
+		}),
 	})
-
-	store.change(protocol.DidChangeTextDocumentParams{
-		TextDocument: protocol.VersionedTextDocumentIdentifier{
-			URI:     "file:///workspace/main.bal",
-			Version: 2,
-		},
-		ContentChanges: []protocol.TextDocumentContentChangeEvent{
-			protocol.NewTextDocumentContentChangeEventTextDocumentContentChangePartial(protocol.TextDocumentContentChangePartial{
-				Range: protocol.Range{
-					Start: protocol.Position{Line: 0, Character: 2},
-					End:   protocol.Position{Line: 0, Character: 3},
-				},
-				Text: "y",
-			}),
-		},
-	})
-
-	document, ok := store.document("file:///workspace/main.bal")
-	if !ok {
-		t.Fatal("document was removed")
-	}
-	if document.text != "😀y\n" || document.version != 2 {
-		t.Fatalf("document = %#v, want updated text and version", document)
+	if !ok || result != "😀y\n" {
+		t.Fatalf("applyChanges = %q ok=%v, want %q", result, ok, "😀y\n")
 	}
 }
 
-func TestDocumentStoreRejectsInvalidBatchAtomically(t *testing.T) {
-	store := newDocumentStore()
-	store.open(protocol.TextDocumentItem{
-		URI:     "file:///workspace/main.bal",
-		Version: 1,
-		Text:    "abc",
+func TestApplyChangesRejectsInvalidBatchAtomically(t *testing.T) {
+	_, ok := applyChanges("abc", []protocol.TextDocumentContentChangeEvent{
+		protocol.NewTextDocumentContentChangeEventTextDocumentContentChangePartial(protocol.TextDocumentContentChangePartial{
+			Range: protocol.Range{
+				Start: protocol.Position{Line: 0, Character: 0},
+				End:   protocol.Position{Line: 0, Character: 1},
+			},
+			Text: "x",
+		}),
+		protocol.NewTextDocumentContentChangeEventTextDocumentContentChangePartial(protocol.TextDocumentContentChangePartial{
+			Range: protocol.Range{
+				Start: protocol.Position{Line: 0, Character: 1},
+				End:   protocol.Position{Line: 0, Character: 2},
+			},
+			RangeLength: protocol.NewOptional(uint32(2)),
+			Text:        "y",
+		}),
 	})
-
-	store.change(protocol.DidChangeTextDocumentParams{
-		TextDocument: protocol.VersionedTextDocumentIdentifier{
-			URI:     "file:///workspace/main.bal",
-			Version: 2,
-		},
-		ContentChanges: []protocol.TextDocumentContentChangeEvent{
-			protocol.NewTextDocumentContentChangeEventTextDocumentContentChangePartial(protocol.TextDocumentContentChangePartial{
-				Range: protocol.Range{
-					Start: protocol.Position{Line: 0, Character: 0},
-					End:   protocol.Position{Line: 0, Character: 1},
-				},
-				Text: "x",
-			}),
-			protocol.NewTextDocumentContentChangeEventTextDocumentContentChangePartial(protocol.TextDocumentContentChangePartial{
-				Range: protocol.Range{
-					Start: protocol.Position{Line: 0, Character: 1},
-					End:   protocol.Position{Line: 0, Character: 2},
-				},
-				RangeLength: protocol.NewOptional(uint32(2)),
-				Text:        "y",
-			}),
-		},
-	})
-
-	document, ok := store.document("file:///workspace/main.bal")
-	if !ok {
-		t.Fatal("document was removed")
-	}
-	if document.text != "abc" || document.version != 1 {
-		t.Fatalf("document = %#v, want original text and version", document)
+	if ok {
+		t.Fatal("invalid batch expected rejection, got acceptance")
 	}
 }
 
-func TestDocumentStoreIgnoresStaleChangesAndNonFileURIs(t *testing.T) {
-	store := newDocumentStore()
-	store.open(protocol.TextDocumentItem{
-		URI:     "file:///workspace/main.bal",
-		Version: 2,
-		Text:    "current",
-	})
-	store.change(protocol.DidChangeTextDocumentParams{
-		TextDocument: protocol.VersionedTextDocumentIdentifier{
-			URI:     "file:///workspace/main.bal",
-			Version: 2,
-		},
-		ContentChanges: []protocol.TextDocumentContentChangeEvent{
-			protocol.NewTextDocumentContentChangeEventTextDocumentContentChangePartial(protocol.TextDocumentContentChangePartial{
-				Range: protocol.Range{End: protocol.Position{Line: 0, Character: 7}},
-				Text:  "stale",
-			}),
-		},
-	})
-	store.open(protocol.TextDocumentItem{URI: "untitled:main.bal", Version: 1, Text: "ignored"})
-
-	document, ok := store.document("file:///workspace/main.bal")
-	if !ok || document.text != "current" || document.version != 2 {
-		t.Fatalf("document = %#v, want current version", document)
-	}
-	if _, ok := store.document("untitled:main.bal"); ok {
-		t.Fatal("non-file URI was retained")
+func TestApplyChangesEmptyChangesRejected(t *testing.T) {
+	if _, ok := applyChanges("abc", nil); ok {
+		t.Fatal("empty changes expected rejection")
 	}
 }

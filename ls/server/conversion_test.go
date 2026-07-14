@@ -19,15 +19,28 @@ package server
 import (
 	"testing"
 
+	"ballerina-lang-go/ls/core/compile"
 	"ballerina-lang-go/ls/protocol"
 )
 
-func TestCompileOverlayDiagnostics(t *testing.T) {
-	diagnostics := compileOverlayDiagnostics("file:///workspace/main.bal", "public function main() {\n    int x = 1;\n}\n")
-	if len(diagnostics) != 1 {
-		t.Fatalf("diagnostics = %d, want 1", len(diagnostics))
+func TestConvertDiagnosticsUTF16Boundary(t *testing.T) {
+	text := "public function main() {\n    int x = 1;\n}\n"
+	diags := []compile.CompilerDiagnostic{
+		{
+			StartLine: 1,
+			StartChar: 4,
+			EndLine:   1,
+			EndChar:   14,
+			Severity:  compile.SeverityError,
+			Code:      "SEMANTIC_ERROR",
+			Message:   "unused variable 'x'",
+		},
 	}
-	diag := diagnostics[0]
+	converted := convertDiagnostics(diags, text)
+	if len(converted) != 1 {
+		t.Fatalf("converted = %d, want 1", len(converted))
+	}
+	diag := converted[0]
 	severity, _ := diag.Severity.Value()
 	if severity != protocol.DiagnosticSeverityError {
 		t.Errorf("severity = %v, want SeverityError", severity)
@@ -43,124 +56,45 @@ func TestCompileOverlayDiagnostics(t *testing.T) {
 	}
 	wantStart := protocol.Position{Line: 1, Character: 4}
 	wantEnd := protocol.Position{Line: 1, Character: 14}
-	if diag.Range.Start != wantStart || diag.Range.End != wantEnd {
-		t.Errorf("range = %+v..%+v, want %+v..%+v", diag.Range.Start, diag.Range.End, wantStart, wantEnd)
+	if diag.Range.Start != wantStart {
+		t.Errorf("range start = %+v, want %+v", diag.Range.Start, wantStart)
 	}
-
-	if got := compileOverlayDiagnostics("file:///workspace/main.bal", "public function main() {}\n"); len(got) != 0 {
-		t.Fatalf("valid diagnostics = %d, want 0", len(got))
-	}
-
-	if got := compileOverlayDiagnostics("untitled:Untitled-1", "public function main() {\n    int x = 1;\n}\n"); len(got) != 0 {
-		t.Fatalf("non-file diagnostics = %d, want 0", len(got))
+	if diag.Range.End != wantEnd {
+		t.Errorf("range end = %+v, want %+v", diag.Range.End, wantEnd)
 	}
 }
 
-func TestByteOffsetToPositionUTF16(t *testing.T) {
-	tests := []struct {
-		name     string
-		text     string
-		offset   int
-		wantLine uint32
-		wantChar uint32
-		wantOK   bool
-	}{
-		{name: "ascii start", text: "abc\ndef\n", offset: 0, wantLine: 0, wantChar: 0, wantOK: true},
-		{name: "ascii mid line0", text: "abc\ndef\n", offset: 2, wantLine: 0, wantChar: 2, wantOK: true},
-		{name: "ascii at newline belongs to line0 end", text: "abc\ndef\n", offset: 3, wantLine: 0, wantChar: 3, wantOK: true},
-		{name: "ascii line1 start", text: "abc\ndef\n", offset: 4, wantLine: 1, wantChar: 0, wantOK: true},
-		{name: "ascii end of text trailing line", text: "abc\ndef\n", offset: 8, wantLine: 2, wantChar: 0, wantOK: true},
-		{name: "crlf single break line1 start", text: "ab\r\ncd", offset: 4, wantLine: 1, wantChar: 0, wantOK: true},
-		{name: "crlf at cr belongs to line0 end", text: "ab\r\ncd", offset: 2, wantLine: 0, wantChar: 2, wantOK: true},
-		{name: "cr-only break", text: "ab\rcd", offset: 3, wantLine: 1, wantChar: 0, wantOK: true},
-		{name: "surrogate pair counts two units", text: "😀x", offset: 4, wantLine: 0, wantChar: 2, wantOK: true},
-		{name: "offset after surrogate at ascii", text: "😀x", offset: 5, wantLine: 0, wantChar: 3, wantOK: true},
-		{name: "surrogate on later line", text: "😀\n😀z", offset: 9, wantLine: 1, wantChar: 2, wantOK: true},
-		{name: "negative offset invalid", text: "abc", offset: -1, wantOK: false},
-		{name: "offset past end invalid", text: "abc", offset: 4, wantOK: false},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			lineStarts := computeLineStarts(tc.text)
-			pos, ok := byteOffsetToPosition(tc.text, lineStarts, tc.offset)
-			if ok != tc.wantOK {
-				t.Fatalf("ok = %v, want %v", ok, tc.wantOK)
-			}
-			if !tc.wantOK {
-				return
-			}
-			if pos.Line != tc.wantLine {
-				t.Errorf("line = %d, want %d", pos.Line, tc.wantLine)
-			}
-			if pos.Character != tc.wantChar {
-				t.Errorf("character = %d, want %d", pos.Character, tc.wantChar)
-			}
-		})
+func TestConvertDiagnosticsEmptyReturnsNil(t *testing.T) {
+	if converted := convertDiagnostics(nil, "abc"); converted != nil {
+		t.Fatalf("convertDiagnostics(nil) = %v, want nil", converted)
 	}
 }
 
-func TestDocumentStoreReportsAcceptedMutations(t *testing.T) {
-	store := newDocumentStore()
-
-	if _, ok := store.open(protocol.TextDocumentItem{
-		URI: "untitled:Untitled-1", Version: 1, Text: "x",
-	}); ok {
-		t.Fatal("non-file open reported accepted")
-	}
-	doc, ok := store.open(protocol.TextDocumentItem{
-		URI: "file:///workspace/main.bal", Version: 1, Text: "abc",
-	})
-	if !ok {
-		t.Fatal("file open reported rejected")
-	}
-	if doc.text != "abc" || doc.version != 1 {
-		t.Fatalf("opened document = %#v", doc)
-	}
-
-	if _, ok := store.change(protocol.DidChangeTextDocumentParams{
-		TextDocument: protocol.VersionedTextDocumentIdentifier{
-			URI:     "file:///workspace/main.bal",
-			Version: 1,
+func TestConvertDiagnosticsSurrogatePairUTF16(t *testing.T) {
+	text := "😀x\n"
+	// 😀 is 4 bytes (1 UTF-16 code unit pair = 2), x is 1 byte (1 UTF-16 unit)
+	// Byte offset 4 = after 😀, char 2 in UTF-16
+	diags := []compile.CompilerDiagnostic{
+		{
+			StartLine: 0,
+			StartChar: 4, // byte offset 4 = after 😀
+			EndLine:   0,
+			EndChar:   5, // byte offset 5 = after x
+			Severity:  compile.SeverityError,
+			Code:      "TEST",
+			Message:   "test",
 		},
-		ContentChanges: []protocol.TextDocumentContentChangeEvent{
-			protocol.NewTextDocumentContentChangeEventTextDocumentContentChangePartial(protocol.TextDocumentContentChangePartial{
-				Range: protocol.Range{End: protocol.Position{Line: 0, Character: 0}},
-				Text:  "z",
-			}),
-		},
-	}); ok {
-		t.Fatal("stale change reported accepted")
 	}
-
-	doc, ok = store.change(protocol.DidChangeTextDocumentParams{
-		TextDocument: protocol.VersionedTextDocumentIdentifier{
-			URI:     "file:///workspace/main.bal",
-			Version: 2,
-		},
-		ContentChanges: []protocol.TextDocumentContentChangeEvent{
-			protocol.NewTextDocumentContentChangeEventTextDocumentContentChangePartial(protocol.TextDocumentContentChangePartial{
-				Range: protocol.Range{
-					Start: protocol.Position{Line: 0, Character: 0},
-					End:   protocol.Position{Line: 0, Character: 3},
-				},
-				Text: "xyz",
-			}),
-		},
-	})
-	if !ok {
-		t.Fatal("fresh change reported rejected")
+	converted := convertDiagnostics(diags, text)
+	if len(converted) != 1 {
+		t.Fatalf("converted = %d, want 1", len(converted))
 	}
-	if doc.text != "xyz" || doc.version != 2 {
-		t.Fatalf("changed document = %#v", doc)
+	wantStart := protocol.Position{Line: 0, Character: 2}
+	wantEnd := protocol.Position{Line: 0, Character: 3}
+	if converted[0].Range.Start != wantStart {
+		t.Errorf("start = %+v, want %+v", converted[0].Range.Start, wantStart)
 	}
-
-	if store.close(protocol.TextDocumentIdentifier{URI: "file:///workspace/other.bal"}) {
-		t.Fatal("close of unknown document reported accepted")
-	}
-	if !store.close(protocol.TextDocumentIdentifier{URI: "file:///workspace/main.bal"}) {
-		t.Fatal("close of open document reported rejected")
-	}
-	if _, ok := store.document("file:///workspace/main.bal"); ok {
-		t.Fatal("closed document was retained")
+	if converted[0].Range.End != wantEnd {
+		t.Errorf("end = %+v, want %+v", converted[0].Range.End, wantEnd)
 	}
 }

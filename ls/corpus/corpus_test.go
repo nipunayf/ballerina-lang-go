@@ -26,6 +26,8 @@ import (
 	"strings"
 	"testing"
 
+	"ballerina-lang-go/ls/core/compile"
+	"ballerina-lang-go/ls/core/workspace"
 	"ballerina-lang-go/ls/protocol"
 	"ballerina-lang-go/ls/server"
 	"ballerina-lang-go/platform/pal"
@@ -56,12 +58,18 @@ func (t *memoryTransport) Write(p []byte) (int, error) {
 func TestCorpus(t *testing.T) {
 	platform, cleanup := palnative.NewPlatform()
 	defer cleanup()
-	runTranscript(t, platform.FS, "sync/testdata/incremental_edit.initialize.json")
+	runTranscript(t, platform, "sync/testdata/incremental_edit.initialize.json")
 }
 
-func runTranscript(t *testing.T, filesystem pal.FS, path string) {
+func TestURISchemeRejectionCorpus(t *testing.T) {
+	platform, cleanup := palnative.NewPlatform()
+	defer cleanup()
+	runTranscript(t, platform, "sync/testdata/uri-scheme-rejection.json")
+}
+
+func runTranscript(t *testing.T, platform pal.Platform, path string) {
 	t.Helper()
-	content, err := filesystem.ReadFile(path)
+	content, err := platform.FS.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +77,7 @@ func runTranscript(t *testing.T, filesystem pal.FS, path string) {
 	if err := json.Unmarshal(content, &fixture); err != nil {
 		t.Fatal(err)
 	}
-	source, err := filesystem.ReadFile("sync/testdata/" + fixture.Source)
+	source, err := platform.FS.ReadFile("sync/testdata/" + fixture.Source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +92,7 @@ func runTranscript(t *testing.T, filesystem pal.FS, path string) {
 		}
 	}
 	transport := &memoryTransport{reader: bytes.NewReader(input.Bytes())}
-	if err := server.New(transport).Serve(); err != nil {
+	if err := server.New(transport, workspace.New(platform), compile.New(platform)).Serve(); err != nil {
 		t.Fatal(err)
 	}
 	actual, err := readMessages(transport.writer.Bytes())
@@ -97,7 +105,7 @@ func runTranscript(t *testing.T, filesystem pal.FS, path string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := filesystem.WriteFile(path, append(updated, '\n')); err != nil {
+		if err := platform.FS.WriteFile(path, append(updated, '\n')); err != nil {
 			t.Fatal(err)
 		}
 		return

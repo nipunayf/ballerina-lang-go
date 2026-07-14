@@ -18,10 +18,14 @@ package server
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 
+	"ballerina-lang-go/ls/core/compile"
+	"ballerina-lang-go/ls/core/uri"
+	"ballerina-lang-go/ls/core/workspace"
 	"ballerina-lang-go/ls/protocol"
 )
 
@@ -29,15 +33,20 @@ const publishDiagnosticsMethod = "textDocument/publishDiagnostics"
 
 type Server struct {
 	transport      protocol.Transport
-	documents      *documentStore
+	projects       *workspace.ProjectService
+	compiler       *compile.CompilationService
 	versionSupport bool
 	initialized    bool
 }
 
-func New(transport protocol.Transport) *Server {
+// New creates a Server with the given transport and core services. The
+// services are injected explicitly — the corpus driver wires
+// workspace.New(platform) and compile.New(platform).
+func New(transport protocol.Transport, projects *workspace.ProjectService, compiler *compile.CompilationService) *Server {
 	return &Server{
 		transport: transport,
-		documents: newDocumentStore(),
+		projects:  projects,
+		compiler:  compiler,
 	}
 }
 
@@ -137,11 +146,28 @@ func (s *Server) handleDidOpen(params json.RawMessage) *protocol.Notification {
 	if json.Unmarshal(params, &didOpen) != nil {
 		return nil
 	}
-	document, ok := s.documents.open(didOpen.TextDocument)
-	if !ok {
+	docURI, err := uri.NewFileURI(didOpen.TextDocument.URI)
+	if err != nil {
 		return nil
 	}
-	return s.publishDiagnostics(didOpen.TextDocument.URI, document.version, true, compileOverlayDiagnostics(didOpen.TextDocument.URI, document.text))
+	snapshot, err := s.projects.Apply(context.Background(), workspace.DocumentChange{
+		Kind:       workspace.ChangeOpen,
+		URI:        docURI,
+		Text:       didOpen.TextDocument.Text,
+		Version:    didOpen.TextDocument.Version,
+		LanguageID: string(didOpen.TextDocument.LanguageID),
+	})
+	if err != nil {
+		return nil
+	}
+	result, err := s.compiler.Compile(context.Background(), compile.CompileRequest{
+		URI:  docURI,
+		Text: snapshot.Text,
+	})
+	if err != nil {
+		return nil
+	}
+	return s.publishDiagnostics(didOpen.TextDocument.URI, snapshot.Version, true, convertDiagnostics(result.Diagnostics, snapshot.Text))
 }
 
 func (s *Server) handleDidChange(params json.RawMessage) *protocol.Notification {
@@ -149,11 +175,37 @@ func (s *Server) handleDidChange(params json.RawMessage) *protocol.Notification 
 	if json.Unmarshal(params, &didChange) != nil {
 		return nil
 	}
-	document, ok := s.documents.change(didChange)
+	docURI, err := uri.NewFileURI(didChange.TextDocument.URI)
+	if err != nil {
+		return nil
+	}
+	current, ok := s.projects.Snapshot(docURI)
 	if !ok {
 		return nil
 	}
-	return s.publishDiagnostics(didChange.TextDocument.URI, document.version, true, compileOverlayDiagnostics(didChange.TextDocument.URI, document.text))
+	// UTF-16 boundary: resolve protocol.TextEdit ranges to full text here,
+	// before calling workspace.Apply with resolved Text.
+	fullText, ok := applyChanges(current.Text, didChange.ContentChanges)
+	if !ok {
+		return nil
+	}
+	snapshot, err := s.projects.Apply(context.Background(), workspace.DocumentChange{
+		Kind:    workspace.ChangeUpdate,
+		URI:     docURI,
+		Text:    fullText,
+		Version: didChange.TextDocument.Version,
+	})
+	if err != nil {
+		return nil
+	}
+	result, err := s.compiler.Compile(context.Background(), compile.CompileRequest{
+		URI:  docURI,
+		Text: snapshot.Text,
+	})
+	if err != nil {
+		return nil
+	}
+	return s.publishDiagnostics(didChange.TextDocument.URI, snapshot.Version, true, convertDiagnostics(result.Diagnostics, snapshot.Text))
 }
 
 func (s *Server) handleDidClose(params json.RawMessage) *protocol.Notification {
@@ -161,7 +213,14 @@ func (s *Server) handleDidClose(params json.RawMessage) *protocol.Notification {
 	if json.Unmarshal(params, &didClose) != nil {
 		return nil
 	}
-	if !s.documents.close(didClose.TextDocument) {
+	docURI, err := uri.NewFileURI(didClose.TextDocument.URI)
+	if err != nil {
+		return nil
+	}
+	if _, err := s.projects.Apply(context.Background(), workspace.DocumentChange{
+		Kind: workspace.ChangeClose,
+		URI:  docURI,
+	}); err != nil {
 		return nil
 	}
 	return s.publishDiagnostics(didClose.TextDocument.URI, 0, false, nil)
