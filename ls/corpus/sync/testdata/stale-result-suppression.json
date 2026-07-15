@@ -1,5 +1,5 @@
 {
-  "source": "incremental_edit.bal",
+  "source": "stale-result-suppression.bal",
   "sources": null,
   "messages": [
     {
@@ -18,7 +18,7 @@
       "method": "textDocument/didOpen",
       "params": {
         "textDocument": {
-          "uri": "file:///workspace/incremental_edit.bal",
+          "uri": "file:///workspace/stale-result-suppression.bal",
           "languageId": "ballerina",
           "version": 1,
           "text": "${source}"
@@ -27,30 +27,25 @@
     },
     {
       "jsonrpc": "2.0",
-      "method": "$pal/flush",
-      "params": {}
-    },
-    {
-      "jsonrpc": "2.0",
       "method": "textDocument/didChange",
       "params": {
         "textDocument": {
-          "uri": "file:///workspace/incremental_edit.bal",
+          "uri": "file:///workspace/stale-result-suppression.bal",
           "version": 2
         },
         "contentChanges": [
           {
             "range": {
               "start": {
-                "line": 0,
+                "line": 1,
                 "character": 0
               },
               "end": {
-                "line": 0,
+                "line": 2,
                 "character": 0
               }
             },
-            "text": "// synchronized\n"
+            "text": " int y = 2;\n"
           }
         ]
       }
@@ -62,19 +57,10 @@
     },
     {
       "jsonrpc": "2.0",
-      "method": "textDocument/didSave",
-      "params": {
-        "textDocument": {
-          "uri": "file:///workspace/incremental_edit.bal"
-        }
-      }
-    },
-    {
-      "jsonrpc": "2.0",
       "method": "textDocument/didClose",
       "params": {
         "textDocument": {
-          "uri": "file:///workspace/incremental_edit.bal"
+          "uri": "file:///workspace/stale-result-suppression.bal"
         }
       }
     }
@@ -97,23 +83,23 @@
       "jsonrpc": "2.0",
       "method": "textDocument/publishDiagnostics",
       "params": {
-        "uri": "file:///workspace/incremental_edit.bal",
+        "uri": "file:///workspace/stale-result-suppression.bal",
         "diagnostics": [
           {
             "range": {
               "start": {
-                "line": 0,
-                "character": 0
+                "line": 1,
+                "character": 1
               },
               "end": {
-                "line": 0,
-                "character": 20
+                "line": 1,
+                "character": 11
               }
             },
             "severity": 1,
             "code": "SEMANTIC_ERROR",
             "source": "ballerina",
-            "message": "unused variable 'emoji'"
+            "message": "unused variable 'y'"
           }
         ]
       }
@@ -122,32 +108,7 @@
       "jsonrpc": "2.0",
       "method": "textDocument/publishDiagnostics",
       "params": {
-        "uri": "file:///workspace/incremental_edit.bal",
-        "diagnostics": [
-          {
-            "range": {
-              "start": {
-                "line": 1,
-                "character": 0
-              },
-              "end": {
-                "line": 1,
-                "character": 20
-              }
-            },
-            "severity": 1,
-            "code": "SEMANTIC_ERROR",
-            "source": "ballerina",
-            "message": "unused variable 'emoji'"
-          }
-        ]
-      }
-    },
-    {
-      "jsonrpc": "2.0",
-      "method": "textDocument/publishDiagnostics",
-      "params": {
-        "uri": "file:///workspace/incremental_edit.bal",
+        "uri": "file:///workspace/stale-result-suppression.bal",
         "diagnostics": null
       }
     }

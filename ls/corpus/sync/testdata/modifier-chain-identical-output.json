@@ -1,5 +1,5 @@
 {
-  "source": "incremental_edit.bal",
+  "source": "modifier-chain-identical-output.bal",
   "sources": null,
   "messages": [
     {
@@ -18,7 +18,7 @@
       "method": "textDocument/didOpen",
       "params": {
         "textDocument": {
-          "uri": "file:///workspace/incremental_edit.bal",
+          "uri": "file:///workspace/modifier-chain-identical-output.bal",
           "languageId": "ballerina",
           "version": 1,
           "text": "${source}"
@@ -35,7 +35,7 @@
       "method": "textDocument/didChange",
       "params": {
         "textDocument": {
-          "uri": "file:///workspace/incremental_edit.bal",
+          "uri": "file:///workspace/modifier-chain-identical-output.bal",
           "version": 2
         },
         "contentChanges": [
@@ -50,7 +50,7 @@
                 "character": 0
               }
             },
-            "text": "// synchronized\n"
+            "text": "// header\n"
           }
         ]
       }
@@ -62,10 +62,27 @@
     },
     {
       "jsonrpc": "2.0",
-      "method": "textDocument/didSave",
+      "method": "textDocument/didOpen",
       "params": {
         "textDocument": {
-          "uri": "file:///workspace/incremental_edit.bal"
+          "uri": "file:///other/modifier-chain-fresh.bal",
+          "languageId": "ballerina",
+          "version": 1,
+          "text": "// header\npublic function main() {\n int a = 1;\n}\n"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "$pal/flush",
+      "params": {}
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/didClose",
+      "params": {
+        "textDocument": {
+          "uri": "file:///workspace/modifier-chain-identical-output.bal"
         }
       }
     },
@@ -74,7 +91,7 @@
       "method": "textDocument/didClose",
       "params": {
         "textDocument": {
-          "uri": "file:///workspace/incremental_edit.bal"
+          "uri": "file:///other/modifier-chain-fresh.bal"
         }
       }
     }
@@ -97,23 +114,23 @@
       "jsonrpc": "2.0",
       "method": "textDocument/publishDiagnostics",
       "params": {
-        "uri": "file:///workspace/incremental_edit.bal",
+        "uri": "file:///workspace/modifier-chain-identical-output.bal",
         "diagnostics": [
           {
             "range": {
               "start": {
-                "line": 0,
-                "character": 0
+                "line": 1,
+                "character": 1
               },
               "end": {
-                "line": 0,
-                "character": 20
+                "line": 1,
+                "character": 11
               }
             },
             "severity": 1,
             "code": "SEMANTIC_ERROR",
             "source": "ballerina",
-            "message": "unused variable 'emoji'"
+            "message": "unused variable 'a'"
           }
         ]
       }
@@ -122,23 +139,23 @@
       "jsonrpc": "2.0",
       "method": "textDocument/publishDiagnostics",
       "params": {
-        "uri": "file:///workspace/incremental_edit.bal",
+        "uri": "file:///workspace/modifier-chain-identical-output.bal",
         "diagnostics": [
           {
             "range": {
               "start": {
-                "line": 1,
-                "character": 0
+                "line": 2,
+                "character": 1
               },
               "end": {
-                "line": 1,
-                "character": 20
+                "line": 2,
+                "character": 11
               }
             },
             "severity": 1,
             "code": "SEMANTIC_ERROR",
             "source": "ballerina",
-            "message": "unused variable 'emoji'"
+            "message": "unused variable 'a'"
           }
         ]
       }
@@ -147,7 +164,40 @@
       "jsonrpc": "2.0",
       "method": "textDocument/publishDiagnostics",
       "params": {
-        "uri": "file:///workspace/incremental_edit.bal",
+        "uri": "file:///other/modifier-chain-fresh.bal",
+        "diagnostics": [
+          {
+            "range": {
+              "start": {
+                "line": 2,
+                "character": 1
+              },
+              "end": {
+                "line": 2,
+                "character": 11
+              }
+            },
+            "severity": 1,
+            "code": "SEMANTIC_ERROR",
+            "source": "ballerina",
+            "message": "unused variable 'a'"
+          }
+        ]
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "uri": "file:///workspace/modifier-chain-identical-output.bal",
+        "diagnostics": null
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "uri": "file:///other/modifier-chain-fresh.bal",
         "diagnostics": null
       }
     }

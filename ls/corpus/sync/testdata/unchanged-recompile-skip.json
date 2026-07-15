@@ -1,5 +1,5 @@
 {
-  "source": "incremental_edit.bal",
+  "source": "unchanged-recompile-skip.bal",
   "sources": null,
   "messages": [
     {
@@ -18,7 +18,7 @@
       "method": "textDocument/didOpen",
       "params": {
         "textDocument": {
-          "uri": "file:///workspace/incremental_edit.bal",
+          "uri": "file:///workspace/unchanged-recompile-skip.bal",
           "languageId": "ballerina",
           "version": 1,
           "text": "${source}"
@@ -35,7 +35,7 @@
       "method": "textDocument/didChange",
       "params": {
         "textDocument": {
-          "uri": "file:///workspace/incremental_edit.bal",
+          "uri": "file:///workspace/unchanged-recompile-skip.bal",
           "version": 2
         },
         "contentChanges": [
@@ -50,7 +50,7 @@
                 "character": 0
               }
             },
-            "text": "// synchronized\n"
+            "text": ""
           }
         ]
       }
@@ -62,19 +62,10 @@
     },
     {
       "jsonrpc": "2.0",
-      "method": "textDocument/didSave",
-      "params": {
-        "textDocument": {
-          "uri": "file:///workspace/incremental_edit.bal"
-        }
-      }
-    },
-    {
-      "jsonrpc": "2.0",
       "method": "textDocument/didClose",
       "params": {
         "textDocument": {
-          "uri": "file:///workspace/incremental_edit.bal"
+          "uri": "file:///workspace/unchanged-recompile-skip.bal"
         }
       }
     }
@@ -97,23 +88,23 @@
       "jsonrpc": "2.0",
       "method": "textDocument/publishDiagnostics",
       "params": {
-        "uri": "file:///workspace/incremental_edit.bal",
+        "uri": "file:///workspace/unchanged-recompile-skip.bal",
         "diagnostics": [
           {
             "range": {
               "start": {
-                "line": 0,
-                "character": 0
+                "line": 1,
+                "character": 1
               },
               "end": {
-                "line": 0,
-                "character": 20
+                "line": 1,
+                "character": 11
               }
             },
             "severity": 1,
             "code": "SEMANTIC_ERROR",
             "source": "ballerina",
-            "message": "unused variable 'emoji'"
+            "message": "unused variable 'x'"
           }
         ]
       }
@@ -122,23 +113,23 @@
       "jsonrpc": "2.0",
       "method": "textDocument/publishDiagnostics",
       "params": {
-        "uri": "file:///workspace/incremental_edit.bal",
+        "uri": "file:///workspace/unchanged-recompile-skip.bal",
         "diagnostics": [
           {
             "range": {
               "start": {
                 "line": 1,
-                "character": 0
+                "character": 1
               },
               "end": {
                 "line": 1,
-                "character": 20
+                "character": 11
               }
             },
             "severity": 1,
             "code": "SEMANTIC_ERROR",
             "source": "ballerina",
-            "message": "unused variable 'emoji'"
+            "message": "unused variable 'x'"
           }
         ]
       }
@@ -147,7 +138,7 @@
       "jsonrpc": "2.0",
       "method": "textDocument/publishDiagnostics",
       "params": {
-        "uri": "file:///workspace/incremental_edit.bal",
+        "uri": "file:///workspace/unchanged-recompile-skip.bal",
         "diagnostics": null
       }
     }

@@ -29,6 +29,11 @@
     },
     {
       "jsonrpc": "2.0",
+      "method": "$pal/flush",
+      "params": {}
+    },
+    {
+      "jsonrpc": "2.0",
       "method": "$pal/writeFile",
       "params": {
         "path": "Ballerina.toml",
@@ -71,6 +76,11 @@
           }
         ]
       }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "$pal/flush",
+      "params": {}
     },
     {
       "jsonrpc": "2.0",

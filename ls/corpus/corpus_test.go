@@ -107,6 +107,24 @@ func TestWatchedFileTransitionCorpus(t *testing.T) {
 	runTranscript(t, platform, "sync/testdata/watched-file-transition.json")
 }
 
+func TestStaleResultSuppressionCorpus(t *testing.T) {
+	platform, cleanup := palnative.NewPlatform()
+	defer cleanup()
+	runTranscript(t, platform, "sync/testdata/stale-result-suppression.json")
+}
+
+func TestUnchangedRecompileSkipCorpus(t *testing.T) {
+	platform, cleanup := palnative.NewPlatform()
+	defer cleanup()
+	runTranscript(t, platform, "sync/testdata/unchanged-recompile-skip.json")
+}
+
+func TestModifierChainIdenticalOutputCorpus(t *testing.T) {
+	platform, cleanup := palnative.NewPlatform()
+	defer cleanup()
+	runTranscript(t, platform, "sync/testdata/modifier-chain-identical-output.json")
+}
+
 func runTranscript(t *testing.T, platform pal.Platform, path string) {
 	t.Helper()
 	content, err := platform.FS.ReadFile(path)
@@ -139,7 +157,10 @@ func runTranscript(t *testing.T, platform pal.Platform, path string) {
 	bus := event.New()
 	defer bus.Close()
 	projectService := workspace.New(platform, bus)
-	srv := server.New(transport, projectService, compile.New(projectService, bus))
+	compiler := compile.New(projectService, bus, compile.WithDebounce(0))
+	defer compiler.Shutdown()
+	srv := server.New(transport, projectService, compiler, bus)
+	defer srv.Flush()
 	var actual []json.RawMessage
 	for _, seg := range segments {
 		if seg.palWrite != nil {

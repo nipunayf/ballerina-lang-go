@@ -1,5 +1,6 @@
 {
   "source": "uri-scheme-rejection.bal",
+  "sources": null,
   "messages": [
     {
       "jsonrpc": "2.0",
@@ -26,6 +27,11 @@
     },
     {
       "jsonrpc": "2.0",
+      "method": "$pal/flush",
+      "params": {}
+    },
+    {
+      "jsonrpc": "2.0",
       "method": "textDocument/didOpen",
       "params": {
         "textDocument": {
@@ -38,6 +44,11 @@
     },
     {
       "jsonrpc": "2.0",
+      "method": "$pal/flush",
+      "params": {}
+    },
+    {
+      "jsonrpc": "2.0",
       "method": "textDocument/didOpen",
       "params": {
         "textDocument": {
@@ -47,6 +58,11 @@
           "text": "public function main() {\n    int x = 1;\n}\n"
         }
       }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "$pal/flush",
+      "params": {}
     }
   ],
   "expected": [
