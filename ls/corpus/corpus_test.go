@@ -83,6 +83,12 @@ func TestCorpus(t *testing.T) {
 	runTranscript(t, platform, "sync/testdata/incremental_edit.initialize.json")
 }
 
+func TestShutdownExitCorpus(t *testing.T) {
+	platform, cleanup := palnative.NewPlatform()
+	defer cleanup()
+	runTranscript(t, platform, "sync/testdata/shutdown-exit.json")
+}
+
 func TestURISchemeRejectionCorpus(t *testing.T) {
 	platform, cleanup := palnative.NewPlatform()
 	defer cleanup()

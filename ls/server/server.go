@@ -48,6 +48,11 @@ const (
 	cancelMethod = "$/cancelRequest"
 )
 
+var (
+	errServerExited          = errors.New("language server exited")
+	errExitedWithoutShutdown = errors.New("language server exited without shutdown")
+)
+
 type Server struct {
 	transport      protocol.Transport
 	projects       *workspace.ProjectService
@@ -55,6 +60,7 @@ type Server struct {
 	bus            *event.Bus
 	versionSupport bool
 	initialized    bool
+	shuttingDown   bool
 
 	writeMu sync.Mutex // serializes framed writes (Serve + CE subscriber)
 
@@ -107,6 +113,9 @@ func (s *Server) Serve() error {
 			return err
 		}
 		if err := s.handleMessage(message); err != nil {
+			if errors.Is(err, errServerExited) {
+				return nil
+			}
 			return err
 		}
 	}
@@ -132,11 +141,30 @@ func (s *Server) handleRequest(message protocol.Message) error {
 }
 
 func (s *Server) dispatchRequest(message protocol.Message) (any, bool) {
+	if s.shuttingDown && message.Method != "shutdown" {
+		return nil, false
+	}
 	switch message.Method {
 	case "initialize":
 		return s.handleInitialize(message.Params)
+	case "shutdown":
+		return s.handleShutdown()
 	}
 	return nil, false
+}
+
+func (s *Server) handleShutdown() (any, bool) {
+	if s.shuttingDown {
+		return nil, true
+	}
+	s.shuttingDown = true
+	if s.projects != nil {
+		_ = s.projects.Shutdown(context.Background())
+	}
+	if s.compiler != nil {
+		s.compiler.Shutdown()
+	}
+	return nil, true
 }
 
 func (s *Server) handleInitialize(params json.RawMessage) (any, bool) {
@@ -163,7 +191,13 @@ func (s *Server) handleInitialize(params json.RawMessage) (any, bool) {
 }
 
 func (s *Server) handleNotification(message protocol.Message) error {
-	if !s.initialized {
+	if message.Method == "exit" {
+		if !s.shuttingDown {
+			return errExitedWithoutShutdown
+		}
+		return errServerExited
+	}
+	if !s.initialized || s.shuttingDown {
 		return nil
 	}
 	switch message.Method {
