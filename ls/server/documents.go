@@ -26,7 +26,7 @@ import (
 // (UTF-16 code-unit positions) to byte offsets in the full text. The server
 // does this before calling workspace.Apply with resolved full text, keeping
 // ls/core protocol-free. These helpers stay in ls/server per the core-service
-// seam design; they move into core only at ticket 10 cutover if warranted.
+// seam design.
 
 func applyChanges(text string, changes []protocol.TextDocumentContentChangeEvent) (string, bool) {
 	if len(changes) == 0 {

@@ -41,4 +41,4 @@ Example `record_field.hover.json`:
 - Golden updates use the repo's existing flow: `go test ./ls/corpus --update`, then `git diff` the goldens and revert unrelated drift.
 - This mirrors the Java LS convention (`source/*.bal` + `configs/*.json`) inside this repo's corpus/`--update` culture.
 
-**The driver does not exist yet.** The first iteration that needs verification must build it as an explicit deliverable of that iteration's design, not as incidental plumbing.
+The driver is implemented in `ls/corpus/corpus_test.go`; extend it only when a fixture cannot express the scenario through the existing real-framing session.
