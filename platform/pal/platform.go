@@ -51,6 +51,7 @@ type (
 	Platform struct {
 		IO      IO
 		FS      FS
+		OS      OS
 		Time    Time
 		HTTP    HTTP
 		Signals SignalSource
@@ -67,6 +68,15 @@ type (
 		ReadDir    func(path string) ([]fs.DirEntry, error)
 		MkdirAll   func(path string, perm fs.FileMode) error
 	}
+	OS struct {
+		GetEnv      func(name string) string
+		GetUsername func() string
+		GetUserHome func() string
+		SetEnv      func(key, val string) error
+		UnsetEnv    func(key string) error
+		ListEnv     func() map[string]string
+		Exec        func(command string, args []string, envOverride map[string]string) (ProcessHandle, error)
+	}
 	Time struct {
 		Now          func() time.Time
 		MonotonicNow func() time.Duration
@@ -75,6 +85,14 @@ type (
 		NewClient func(cfg ClientConfig) HTTPClient
 	}
 )
+
+// ProcessHandle is an opaque handle to a running subprocess.
+type ProcessHandle interface {
+	WaitForExit() (int, error)
+	ReadStdout() ([]byte, error)
+	ReadStderr() ([]byte, error)
+	Kill()
+}
 
 // HTTP
 type (

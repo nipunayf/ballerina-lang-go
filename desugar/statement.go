@@ -1020,7 +1020,7 @@ func desugarForEachOnIterable(cx *functionContext, collection ast.BLangActionOrE
 	nextRefForValue.SetDeterminedType(semtypes.MAPPING)
 
 	valueAccess := &ast.BLangFieldBaseAccess{
-		Field: ast.BLangIdentifier{Value: "value"},
+		Field: &ast.BLangIdentifier{Value: "value"},
 	}
 	valueAccess.Expr = nextRefForValue
 	valueAccess.SetDeterminedType(loopVarDef.Var.GetDeterminedType())
@@ -1067,6 +1067,19 @@ func walkMatchStatement(cx *functionContext, stmt *ast.BLangMatchStatement) desu
 
 	for i := range stmt.MatchClauses {
 		clause := &stmt.MatchClauses[i]
+		// Const-pattern expressions are lowered directly by BIR generation, so
+		// they must be walked here too — otherwise a reference to a folded
+		// constant would survive as a dangling global once the constant is
+		// dropped from the BIR package.
+		for _, pattern := range clause.Patterns {
+			constPattern, ok := pattern.(*ast.BLangConstPattern)
+			if !ok {
+				continue
+			}
+			patternResult := walkExpression(cx, constPattern.Expr)
+			initStmts = append(initStmts, patternResult.initStmts...)
+			constPattern.Expr = patternResult.replacementNode.(ast.BLangExpression)
+		}
 		if clause.Guard != nil {
 			guardResult := walkExpression(cx, clause.Guard)
 			initStmts = append(initStmts, guardResult.initStmts...)

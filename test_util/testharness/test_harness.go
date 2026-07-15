@@ -40,6 +40,7 @@ import (
 
 	"ballerina-lang-go/bir"
 	"ballerina-lang-go/platform/pal"
+	"ballerina-lang-go/platform/palnative"
 	"ballerina-lang-go/projects"
 	"ballerina-lang-go/runtime"
 	"ballerina-lang-go/runtime/extern"
@@ -212,6 +213,17 @@ func normalizePath(path string) string {
 	return path
 }
 
+// createParentDirs creates any missing ancestor directories for path, mirroring
+// jBallerina's io module, which creates parent directories before opening a
+// file for writing or appending.
+func createParentDirs(path string) error {
+	dir := filepath.Dir(path)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return os.MkdirAll(dir, 0o755)
+	}
+	return nil
+}
+
 func (p *testPal) Platform() pal.Platform {
 	p.ensureSignalSource()
 	return pal.Platform{
@@ -232,10 +244,18 @@ func (p *testPal) Platform() pal.Platform {
 				return os.ReadFile(normalizePath(path))
 			},
 			WriteFile: func(path string, data []byte) error {
-				return os.WriteFile(normalizePath(path), data, 0o644)
+				path = normalizePath(path)
+				if err := createParentDirs(path); err != nil {
+					return err
+				}
+				return os.WriteFile(path, data, 0o644)
 			},
 			AppendFile: func(path string, data []byte) (err error) {
-				f, err := os.OpenFile(normalizePath(path), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+				path = normalizePath(path)
+				if err := createParentDirs(path); err != nil {
+					return err
+				}
+				f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 				if err != nil {
 					return err
 				}
@@ -247,6 +267,34 @@ func (p *testPal) Platform() pal.Platform {
 				_, err = f.Write(data)
 				return err
 			},
+		},
+		OS: pal.OS{
+			GetEnv:      os.Getenv,
+			GetUsername: func() string { return "test" },
+			GetUserHome: func() string {
+				home, err := os.UserHomeDir()
+				if err != nil {
+					return ""
+				}
+				return home
+			},
+			SetEnv:   os.Setenv,
+			UnsetEnv: os.Unsetenv,
+			ListEnv: func() map[string]string {
+				result := make(map[string]string)
+				for _, e := range os.Environ() {
+					for i := 0; i < len(e); i++ {
+						if e[i] == '=' {
+							result[e[:i]] = e[i+1:]
+							break
+						}
+					}
+				}
+				return result
+			},
+			// Real subprocess execution (like SetEnv/GetEnv above, which hit the
+			// real OS) so os:exec can be exercised end-to-end from corpus tests.
+			Exec: palnative.Exec,
 		},
 		Time: pal.Time{
 			Now:          time.Now,
@@ -376,9 +424,9 @@ func Run(t testing.TB, tc test_util.TestCase, pal TestPal, externs []ExternRegis
 
 	var stderr bytes.Buffer
 	if tc.IsProject {
-		printDiagnostics(fsys, &stderr, result.Diagnostics(), compilation.DiagnosticEnv())
+		PrintDiagnostics(fsys, &stderr, result.Diagnostics(), compilation.DiagnosticEnv())
 	}
-	printDiagnostics(fsys, &stderr, compilation.DiagnosticResult(), compilation.DiagnosticEnv())
+	PrintDiagnostics(fsys, &stderr, compilation.DiagnosticResult(), compilation.DiagnosticEnv())
 	pal.WriteStderr(stderr.String())
 	pal.SetDiagnostics(resolveErrorDiagnostics(compilation.DiagnosticResult(), compilation.DiagnosticEnv()))
 
@@ -557,8 +605,10 @@ func checkExpectedOutputInvariants(t *testing.T, tc test_util.TestCase, stdout, 
 	stderrNonEmpty := strings.TrimSpace(stderr) != ""
 	switch tc.Suffix() {
 	case test_util.SuffixValid:
-		if stderrNonEmpty {
-			t.Fatalf("-v test %q has non-empty expected stderr:\n%s", tc.Name, stderr)
+		// A -v test may write to stderr intentionally (e.g. ballerina/log
+		// records), but it must never leak a compile diagnostic there.
+		if stderrNonEmpty && strings.HasPrefix(strings.TrimSpace(stderr), "error[") {
+			t.Fatalf("-v test %q leaked a compile diagnostic to stderr:\n%s", tc.Name, stderr)
 		}
 		if strings.Contains(stdout, "panic:") {
 			t.Fatalf("-v test %q has a runtime panic in expected stdout:\n%s", tc.Name, stdout)
@@ -610,11 +660,17 @@ func splitStderrDiagnostics(stderr string) []string {
 	return out
 }
 
+// logTimestampPattern matches the leading "time=<RFC3339>" field of a
+// ballerina/log LOGFMT record so it can be normalized to a stable token,
+// keeping golden files deterministic across runs.
+var logTimestampPattern = regexp.MustCompile(`time=\S+`)
+
 func normalizeIntegrationStderr(stderr string) string {
 	stderr = strings.TrimSpace(stderr)
 	if stderr == "" {
 		return ""
 	}
+	stderr = logTimestampPattern.ReplaceAllString(stderr, "time=<TIME>")
 	diags := splitStderrDiagnostics(stderr)
 	slices.Sort(diags)
 	return strings.Join(diags, "\n\n") + "\n"
@@ -749,8 +805,10 @@ func assertAnnotations(t *testing.T, tc test_util.TestCase, stdout, stderr strin
 
 func assertOutputAnnotations(t *testing.T, anns annotations, stdout, stderr string) {
 	t.Helper()
-	if strings.TrimRight(stderr, "\n") != "" {
-		t.Errorf("expected empty stderr for -v test, got:\n%s", stderr)
+	// A -v test may write to stderr intentionally (e.g. ballerina/log records),
+	// but it must never leak a compile diagnostic there.
+	if s := strings.TrimSpace(stderr); s != "" && strings.HasPrefix(s, "error[") {
+		t.Errorf("-v test leaked a compile diagnostic to stderr:\n%s", stderr)
 	}
 	outputs, ok := singleOutputFile(t, anns)
 	if !ok {
@@ -936,7 +994,9 @@ func buildDiagnosticLocation(filePath string, startLine, startCol, endLine, endC
 	}
 }
 
-func printDiagnostics(fsys fs.FS, w io.Writer, diagResult projects.DiagnosticResult, de *diagnostics.DiagnosticEnv) {
+// PrintDiagnostics renders every diagnostic in diagResult to w, in the same
+// "error[CODE]: message" + source-snippet format used by the compiler CLI.
+func PrintDiagnostics(fsys fs.FS, w io.Writer, diagResult projects.DiagnosticResult, de *diagnostics.DiagnosticEnv) {
 	for _, d := range diagResult.Diagnostics() {
 		printDiagnostic(fsys, w, d, de)
 	}

@@ -19,10 +19,13 @@ package symbolpool
 import (
 	"bytes"
 	"fmt"
+	"strings"
 
 	"ballerina-lang-go/context"
 	"ballerina-lang-go/model"
 	"ballerina-lang-go/semtypes"
+	"ballerina-lang-go/tools/diagnostics"
+	"ballerina-lang-go/values"
 )
 
 type symbolReader struct {
@@ -87,7 +90,7 @@ func (sr *symbolReader) readResourceMethodSymbol(space *model.SymbolSpace) {
 	methodName := sr.readStringCP()
 	pathType := sr.readType()
 	sig, defaults, included := sr.readFunctionSignatureBody(space)
-	rm := model.NewResourceMethodSymbol(name, methodName, isPublic)
+	rm := model.NewResourceMethodSymbol(name, methodName, isPublic, diagnostics.NewBuiltinLocation())
 	rm.SetType(ty)
 	rm.SetSignature(sig)
 	rm.SetDefaultableParams(defaults)
@@ -96,14 +99,24 @@ func (sr *symbolReader) readResourceMethodSymbol(space *model.SymbolSpace) {
 	addDeserializedSymbol(space, name, rm)
 }
 
-func addDeserializedSymbol(space *model.SymbolSpace, name string, sym model.Symbol) {
+func addDeserializedSymbol(space *model.SymbolSpace, name string, sym model.Symbol) model.SymbolRef {
 	if !sym.IsPublic() {
 		if _, exists := space.GetSymbol(name); exists {
-			space.AppendSymbol(sym)
-			return
+			return space.RefAt(space.AppendSymbol(sym))
 		}
 	}
 	space.AddSymbol(name, sym)
+	ref, _ := space.GetSymbol(name)
+	return ref
+}
+
+// storeAnnotations records deserialized annotation values on the compiler
+// environment, keyed by the symbol's ref (annotations no longer live on the
+// symbol itself).
+func (sr *symbolReader) storeAnnotations(ref model.SymbolRef, annotations values.AnnotationValues) {
+	for key, value := range annotations {
+		sr.env.SetSymbolAnnotationValue(ref, key, value)
+	}
 }
 
 func (sr *symbolReader) readPackageIdentifier() *model.PackageID {
@@ -161,8 +174,14 @@ func (sr *symbolReader) readSymbol(space *model.SymbolSpace, opaque []model.Symb
 		sr.readRecordSymbol(space)
 	case symTagObjectType:
 		sr.readObjectTypeSymbol(space)
+	case symTagErrorType:
+		sr.readErrorTypeSymbol(space)
 	case symTagValue:
 		sr.readValueSymbol(space)
+	case symTagConstantValue:
+		sr.readConstantValueSymbol(space)
+	case symTagAnnotation:
+		sr.readAnnotationSymbol(space)
 	case symTagFunction:
 		sr.readFunctionSymbol(space)
 	case symTagDependentlyTypedFunction:
@@ -183,33 +202,53 @@ func (sr *symbolReader) readSymbolBase() (name string, isPublic bool, ty semtype
 
 func (sr *symbolReader) readTypeSymbol(space *model.SymbolSpace) {
 	name, isPublic, ty := sr.readSymbolBase()
-	sym := model.NewTypeSymbol(name, isPublic)
+	sym := model.NewTypeSymbol(name, isPublic, diagnostics.NewBuiltinLocation())
 	sym.SetType(ty)
+	annotations := sr.readAnnotationValues()
 	_ = sr.readInclusionMembers(space)
-	addDeserializedSymbol(space, name, &sym)
+	ref := addDeserializedSymbol(space, name, &sym)
+	sr.storeAnnotations(ref, annotations)
 }
 
 func (sr *symbolReader) readRecordSymbol(space *model.SymbolSpace) {
 	name, isPublic, ty := sr.readSymbolBase()
-	sym := model.NewRecordSymbol(name, isPublic)
+	sym := model.NewRecordSymbol(name, isPublic, diagnostics.NewBuiltinLocation())
 	sym.SetType(ty)
+	annotations := sr.readAnnotationValues()
 	for _, m := range sr.readInclusionMembers(space) {
 		sym.AddMember(m)
 	}
-	addDeserializedSymbol(space, name, &sym)
+	ref := addDeserializedSymbol(space, name, &sym)
+	sr.storeAnnotations(ref, annotations)
 }
 
 func (sr *symbolReader) readObjectTypeSymbol(space *model.SymbolSpace) {
 	name, isPublic, ty := sr.readSymbolBase()
-	sym := model.NewObjectTypeSymbol(name, isPublic)
+	sym := model.NewObjectTypeSymbol(name, isPublic, diagnostics.NewBuiltinLocation())
 	sym.SetType(ty)
+	annotations := sr.readAnnotationValues()
 	for _, m := range sr.readInclusionMembers(space) {
 		sym.AddMember(m)
 	}
 	ids := sr.readDistinctTypes(space)
 	sym.SetDistinctTypeIDs(ids)
-	sym.SetType(addObjectDistinctAtoms(ty, ids))
-	addDeserializedSymbol(space, name, &sym)
+	sym.SetType(intersectDistinctAtoms(ty, ids, semtypes.ObjectDefinitionDistinct))
+	ref := addDeserializedSymbol(space, name, &sym)
+	sr.storeAnnotations(ref, annotations)
+	sr.registerLangLibDistinctTypeSymbol(space, name, ref, ids)
+}
+
+func (sr *symbolReader) readErrorTypeSymbol(space *model.SymbolSpace) {
+	name, isPublic, ty := sr.readSymbolBase()
+	sym := model.NewErrorTypeSymbol(name, isPublic, diagnostics.NewBuiltinLocation())
+	sym.SetType(ty)
+	annotations := sr.readAnnotationValues()
+	ids := sr.readDistinctTypes(space)
+	sym.SetDistinctTypeIDs(ids)
+	sym.SetType(intersectDistinctAtoms(ty, ids, semtypes.ErrorDistinct))
+	ref := addDeserializedSymbol(space, name, &sym)
+	sr.storeAnnotations(ref, annotations)
+	sr.registerLangLibDistinctTypeSymbol(space, name, ref, ids)
 }
 
 func (sr *symbolReader) readDistinctTypes(space *model.SymbolSpace) []int {
@@ -223,14 +262,29 @@ func (sr *symbolReader) readDistinctTypes(space *model.SymbolSpace) []int {
 	return ids
 }
 
-func addObjectDistinctAtoms(ty semtypes.SemType, ids []int) semtypes.SemType {
+func intersectDistinctAtoms(ty semtypes.SemType, ids []int, atom func(int) semtypes.SemType) semtypes.SemType {
 	if semtypes.IsZero(ty) {
 		return ty
 	}
 	for _, id := range ids {
-		ty = semtypes.Intersect(ty, semtypes.ObjectDefinitionDistinct(id))
+		ty = semtypes.Intersect(ty, atom(id))
 	}
 	return ty
+}
+
+func (sr *symbolReader) registerLangLibDistinctTypeSymbol(space *model.SymbolSpace, name string, ref model.SymbolRef, ids []int) {
+	if space.Pkg.Organization != "ballerina" || !strings.HasPrefix(space.Pkg.Package, "lang.") {
+		return
+	}
+	for _, id := range ids {
+		distinctRef, ok := sr.env.DistinctTypeSymbolRef(id)
+		if ok && distinctRef == ref {
+			if !sr.env.RegisterLangLibDistinctTypeSymbol(space.Pkg.Package, name, ref) {
+				panic(fmt.Sprintf("conflicting lang library distinct type symbol: %s:%s", space.Pkg.Package, name))
+			}
+			return
+		}
+	}
 }
 
 func (sr *symbolReader) readInclusionMembers(space *model.SymbolSpace) []model.InclusionMember {
@@ -328,11 +382,12 @@ func (sr *symbolReader) readClassSymbol(space *model.SymbolSpace, isNetwork bool
 	name, isPublic, ty := sr.readSymbolBase()
 	var sym model.ClassSymbol
 	if isNetwork {
-		sym = model.NewNetworkClassSymbol(name, isPublic)
+		sym = model.NewNetworkClassSymbol(name, isPublic, diagnostics.NewBuiltinLocation())
 	} else {
-		sym = model.NewClassSymbol(name, isPublic)
+		sym = model.NewClassSymbol(name, isPublic, diagnostics.NewBuiltinLocation())
 	}
 	sym.SetType(ty)
+	annotations := sr.readAnnotationValues()
 	methods := make(map[string]model.SymbolRef)
 	for _, m := range sr.readInclusionMembers(space) {
 		sym.AddMember(m)
@@ -342,7 +397,7 @@ func (sr *symbolReader) readClassSymbol(space *model.SymbolSpace, isNetwork bool
 	}
 	ids := sr.readDistinctTypes(space)
 	sym.SetDistinctTypeIDs(ids)
-	sym.SetType(addObjectDistinctAtoms(ty, ids))
+	sym.SetType(intersectDistinctAtoms(ty, ids, semtypes.ObjectDefinitionDistinct))
 	sym.SetMethods(methods)
 	if isNetwork {
 		var rmCount int64
@@ -352,28 +407,73 @@ func (sr *symbolReader) readClassSymbol(space *model.SymbolSpace, isNetwork bool
 			networkSym.AddResourceMethod(sr.readSymbolRef(space))
 		}
 	}
-	addDeserializedSymbol(space, name, sym)
+	ref := addDeserializedSymbol(space, name, sym)
+	sr.storeAnnotations(ref, annotations)
+	sr.registerLangLibDistinctTypeSymbol(space, name, ref, ids)
+}
+
+type valueSymbolFields struct {
+	name           string
+	isPublic       bool
+	ty             semtypes.SemType
+	isConst        bool
+	isParameter    bool
+	isFinal        bool
+	isConfigurable bool
+	isIsolated     bool
+}
+
+func (sr *symbolReader) readValueSymbolFields() valueSymbolFields {
+	f := valueSymbolFields{}
+	f.name, f.isPublic, f.ty = sr.readSymbolBase()
+	read(sr.r, &f.isConst)
+	read(sr.r, &f.isParameter)
+	read(sr.r, &f.isFinal)
+	read(sr.r, &f.isConfigurable)
+	read(sr.r, &f.isIsolated)
+	return f
+}
+
+func applyValueSymbolFields(sym *model.VariableSymbol, f valueSymbolFields) {
+	sym.SetType(f.ty)
+	if f.isFinal {
+		sym.SetFinal()
+	}
+	if f.isConfigurable {
+		sym.SetConfigurable()
+	}
+	if f.isIsolated {
+		sym.SetIsolated()
+	}
 }
 
 func (sr *symbolReader) readValueSymbol(space *model.SymbolSpace) {
+	f := sr.readValueSymbolFields()
+	sym := model.NewVariableSymbol(f.name, f.isPublic, f.isConst, f.isParameter, diagnostics.NewBuiltinLocation())
+	applyValueSymbolFields(&sym, f)
+	addDeserializedSymbol(space, f.name, &sym)
+}
+
+func (sr *symbolReader) readConstantValueSymbol(space *model.SymbolSpace) {
+	f := sr.readValueSymbolFields()
+	sym := model.NewConstantValueSymbol(f.name, f.isPublic, diagnostics.NewBuiltinLocation())
+	applyValueSymbolFields(&sym.VariableSymbol, f)
+	sym.SetConstantValue(sr.readAnnotationValue())
+	addDeserializedSymbol(space, f.name, sym)
+}
+
+func (sr *symbolReader) readAnnotationSymbol(space *model.SymbolSpace) {
 	name, isPublic, ty := sr.readSymbolBase()
-	var isConst, isParameter, isFinal, isConfigurable, isIsolated bool
+	var isConst bool
 	read(sr.r, &isConst)
-	read(sr.r, &isParameter)
-	read(sr.r, &isFinal)
-	read(sr.r, &isConfigurable)
-	read(sr.r, &isIsolated)
-	sym := model.NewValueSymbol(name, isPublic, isConst, isParameter)
+	var count int64
+	read(sr.r, &count)
+	attachPoints := make([]string, 0, count)
+	for i := int64(0); i < count; i++ {
+		attachPoints = append(attachPoints, sr.readStringCP())
+	}
+	sym := model.NewAnnotationSymbol(name, isPublic, isConst, attachPoints, diagnostics.NewBuiltinLocation())
 	sym.SetType(ty)
-	if isFinal {
-		sym.SetFinal()
-	}
-	if isConfigurable {
-		sym.SetConfigurable()
-	}
-	if isIsolated {
-		sym.SetIsolated()
-	}
 	addDeserializedSymbol(space, name, &sym)
 }
 
@@ -381,7 +481,7 @@ func (sr *symbolReader) readFunctionSymbol(space *model.SymbolSpace) {
 	name, isPublic, ty := sr.readSymbolBase()
 
 	sig, defaultInfo, inclInfo := sr.readFunctionSignatureBody(space)
-	sym := model.NewFunctionSymbol(name, sig, isPublic)
+	sym := model.NewFunctionSymbol(name, sig, isPublic, diagnostics.NewBuiltinLocation())
 	sym.SetType(ty)
 	sym.SetDefaultableParams(defaultInfo)
 	sym.SetIncludedRecordParams(inclInfo)
@@ -443,7 +543,7 @@ func (sr *symbolReader) readDependentlyTypedFunctionSymbol(space *model.SymbolSp
 	var flags uint8
 	read(sr.r, &flags)
 
-	sym := model.NewDependentlyTypedFunctionSymbol(name, paramNames, int(nRequired), model.FuncSymbolFlags(flags), isPublic)
+	sym := model.NewDependentlyTypedFunctionSymbol(name, paramNames, int(nRequired), model.FuncSymbolFlags(flags), isPublic, diagnostics.NewBuiltinLocation())
 	sym.SetParamTypes(paramTypes)
 	defaultInfo := sr.readDefaultableParams(int(paramCount), space)
 	sym.SetDefaultableParams(defaultInfo)

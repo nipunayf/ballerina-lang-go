@@ -454,11 +454,11 @@ func validateMainFunction(a analyzer, fnSymbol model.FunctionSymbol, pos diagnos
 func initializeFunctionAnalyzer(parent analyzer, function *ast.BLangFunction) *functionAnalyzer {
 	fa := initializeFunctionAnalyzerInner(parent, function, nil)
 	// Validate main function constraints
-	if function.Name.Value == "main" {
+	if function.Name.GetValue() == "main" {
 		fnSymbol := parent.ctx().GetSymbol(function.Symbol()).(model.FunctionSymbol)
 		validateMainFunction(parent, fnSymbol, function.GetPosition())
 	}
-	if function.Name.Value == "init" {
+	if function.Name.GetValue() == "init" {
 		// this is to seperate class init from module init
 		if _, isTopLevel := parent.(*SemanticAnalyzer); isTopLevel {
 			fnSymbol := parent.ctx().GetSymbol(function.Symbol()).(model.FunctionSymbol)
@@ -668,7 +668,7 @@ func validateDefaultParamTypes(a analyzer, function invokableSignatureNode) {
 			continue
 		}
 		if !semtypes.IsSubtype(a.tyCtx(), exprTy, paramTy) {
-			a.semanticErr("incompatible default value for parameter '"+param.Name.Value+"'", param.Expr.(ast.BLangNode).GetPosition())
+			a.semanticErr("incompatible default value for parameter '"+param.Name.GetValue()+"'", param.Expr.(ast.BLangNode).GetPosition())
 		}
 	}
 }
@@ -845,7 +845,7 @@ func validateConstantExpr(ctx *context.CompilerContext, expr ast.BLangExpression
 		// always valid
 	case *ast.BLangSimpleVarRef:
 		sym := ctx.GetSymbol(e.Symbol())
-		if vs, ok := sym.(*model.ValueSymbol); ok && vs.IsConst() {
+		if vs, ok := sym.(model.ValueSymbol); ok && vs.IsConst() {
 			return
 		}
 		onNonConst(expr)
@@ -872,6 +872,8 @@ func validateConstantExpr(ctx *context.CompilerContext, expr ast.BLangExpression
 		for _, ins := range e.Insertions {
 			validateConstantExpr(ctx, ins, onNonConst)
 		}
+	case *ast.BLangAnnotAccessExpr:
+		validateConstantExpr(ctx, e.Expr, onNonConst)
 	case *ast.BLangXMLTemplateExpr:
 		for _, ins := range e.Insertions {
 			validateConstantExpr(ctx, ins, onNonConst)
@@ -983,6 +985,13 @@ func analyzeActionOrExpression[A analyzer](a A, expr ast.BLangActionOrExpression
 	case *ast.BLangInferredTypedescDefault:
 		return validateResolvedType(a, expr, expectedType)
 	case *ast.BLangTypedescExpr:
+		return validateResolvedType(a, expr, expectedType)
+	case *ast.BLangAnnotAccessExpr:
+		// Annotation access is only valid on a typedesc value, so the receiver
+		// is analyzed with typedesc as its expected type.
+		if !analyzeActionOrExpression(a, expr.Expr, semtypes.TYPEDESC) {
+			return false
+		}
 		return validateResolvedType(a, expr, expectedType)
 	case *ast.BLangXMLElementLiteral:
 		for i := range expr.Attrs {
@@ -1489,12 +1498,13 @@ func analyzeErrorConstructorExpr[A analyzer](a A, expr *ast.BLangErrorConstructo
 	if !analyzeActionOrExpression(a, msgArg, semtypes.STRING) {
 		return false
 	}
-	mat, ok := semtypes.ErrorDetailAtomicType(tyCtx, expr.DeterminedType)
+	detailTy, ok := semtypes.ErrorDetailType(tyCtx, expr.DeterminedType)
 	if !ok {
-		a.unimplementedErr("non-atomic detail types not supported", expr.GetPosition())
+		a.unimplementedErr("error detail type not supported", expr.GetPosition())
 		return false
 	}
 	seen := make(map[string]bool, len(expr.NamedArgs))
+	providedFields := make([]semtypes.Field, 0, len(expr.NamedArgs))
 	clonableTy := semtypes.CreateCloneable(tyCtx)
 	for _, namedArg := range expr.NamedArgs {
 		name := namedArg.Name.GetValue()
@@ -1503,22 +1513,24 @@ func analyzeErrorConstructorExpr[A analyzer](a A, expr *ast.BLangErrorConstructo
 			return false
 		}
 		seen[name] = true
-		fieldType := mat.FieldInnerVal(name)
+		fieldType := semtypes.MappingMemberTypeInnerValProj(tyCtx, detailTy, semtypes.StringConst(name))
 		if !analyzeActionOrExpression(a, namedArg.Expr, fieldType) {
 			return false
 		}
-		if !semtypes.IsSubtype(tyCtx, namedArg.Expr.GetDeterminedType(), clonableTy) {
+		namedArgTy := namedArg.Expr.GetDeterminedType()
+		if !semtypes.IsSubtype(tyCtx, namedArgTy, clonableTy) {
 			a.semanticErr("named arguments must be subtypes of cloneable", namedArg.GetPosition())
 			return false
 		}
+		providedFields = append(providedFields, semtypes.FieldFrom(name, namedArgTy, false, false))
 	}
 
-	// Every field in the atom must be provided
-	for _, name := range mat.Names {
-		if !seen[name] {
-			a.semanticErr(fmt.Sprintf("missing required field '%s' in error constructor", name), expr.GetPosition())
-			return false
-		}
+	providedDetailDef := semtypes.NewMappingDefinition()
+	providedDetailTy := providedDetailDef.DefineMappingTypeWrapped(tyCtx.Env(), providedFields, semtypes.NEVER)
+	providedDetailTy = semtypes.Intersect(providedDetailTy, semtypes.VAL_READONLY)
+	if !semtypes.IsSubtype(tyCtx, providedDetailTy, detailTy) {
+		a.semanticErr("error detail arguments are incompatible with error detail type", expr.GetPosition())
+		return false
 	}
 
 	if argCount == 2 {
@@ -1713,7 +1725,7 @@ func resourcePathSegmentExpectedType(ctx semtypes.Context, pathType semtypes.Sem
 
 func analyzeStreamOperation[A analyzer](a A, invocation *ast.BLangInvocation, expectedType semtypes.SemType) bool {
 	if len(invocation.ArgExprs) != 0 {
-		a.semanticErr("stream method '"+invocation.Name.Value+"' takes no arguments", invocation.GetPosition())
+		a.semanticErr("stream method '"+invocation.Name.GetValue()+"' takes no arguments", invocation.GetPosition())
 		return false
 	}
 	if invocation.Expr != nil {
@@ -1730,7 +1742,7 @@ func analyzeDirectInvocation[A analyzer](a A, inv invocable, fnSymbol model.Func
 	for i, arg := range inv.CallArgs() {
 		switch arg := arg.(type) {
 		case *ast.BLangNamedArgsExpression:
-			name := arg.Name.Value
+			name := arg.Name.GetValue()
 			targetIndex := -1
 			for j, each := range signature.ParamNames {
 				if each == name {
@@ -1842,7 +1854,7 @@ func visitInner[A analyzer](a A, node ast.BLangNode) ast.Visitor {
 		if fa := enclosingFunctionAnalyzer(a); fa != nil && fa.locals != nil {
 			v := n.Var
 			final := v.IsFinal()
-			if sym, ok := a.ctx().GetSymbol(v.Symbol()).(*model.ValueSymbol); ok && sym.IsFinal() {
+			if sym, ok := a.ctx().GetSymbol(v.Symbol()).(model.ValueSymbol); ok && sym.IsFinal() {
 				final = true
 			}
 			fa.locals.define(v.Symbol(), varDeclMetadata{
@@ -1988,6 +2000,9 @@ func analyzeAssignment[A analyzer](a A, assignment assignmentNode) bool {
 		case model.SymbolKindType:
 			a.semanticErr("cannot assign to type", variable.GetPosition())
 			return false
+		case model.SymbolKindAnnotation:
+			a.semanticErr("cannot assign to annotation", variable.GetPosition())
+			return false
 		}
 	}
 	if !analyzeActionOrExpression(a, variable, semtypes.SemType{}) {
@@ -2019,6 +2034,14 @@ func analyzeWhile[A analyzer](a A, whileStmt *ast.BLangWhile) bool {
 	return analyzeActionOrExpression(a, whileStmt.Expr, semtypes.BOOLEAN)
 }
 
+func getIterableType(cx *context.CompilerContext, symbolType func(model.SymbolRef) semtypes.SemType) (semtypes.SemType, bool) {
+	ref, ok := cx.LangLibDistinctTypeSymbol("lang.object", "Iterable")
+	if !ok {
+		return semtypes.SemType{}, false
+	}
+	return symbolType(ref), true
+}
+
 func validateForeach[A analyzer](a A, foreachStmt *ast.BLangForeach) bool {
 	collection := foreachStmt.Collection
 	if !analyzeActionOrExpression(a, collection, semtypes.SemType{}) {
@@ -2037,7 +2060,7 @@ func validateForeach[A analyzer](a A, foreachStmt *ast.BLangForeach) bool {
 		switch {
 		case semtypes.IsSubtype(a.tyCtx(), collectionType, semtypes.LIST):
 			memberTypes := semtypes.ListAllMemberTypesInner(a.tyCtx(), collectionType)
-			var result = semtypes.NEVER
+			result := semtypes.NEVER
 			for _, each := range memberTypes.SemTypes {
 				result = semtypes.Union(result, each)
 			}
@@ -2048,9 +2071,13 @@ func validateForeach[A analyzer](a A, foreachStmt *ast.BLangForeach) bool {
 			expectedValueType = semtypes.XMLItemType(collectionType)
 		default:
 			tyCtx := a.tyCtx()
-			iterableTy := semtypes.CreateIterable(tyCtx)
+			iterableTy, ok := getIterableType(a.ctx(), a.ctx().SymbolType)
+			if !ok {
+				a.semanticErr("foreach collection must be subtype of object:Iterable", collection.GetPosition())
+				return false
+			}
 			if !semtypes.IsSubtype(tyCtx, collectionType, iterableTy) {
-				a.semanticErr("incompatible types: expected an iterable collection", collection.GetPosition())
+				a.semanticErr("foreach collection must be subtype of object:Iterable", collection.GetPosition())
 				return false
 			}
 			// Extract value type from the iterator's next() return type
@@ -2077,7 +2104,7 @@ func recordKeyName(key *ast.BLangMappingKey) string {
 	case *ast.BLangLiteral:
 		return expr.Value.(string)
 	case *ast.BLangSimpleVarRef:
-		return expr.VariableName.Value
+		return expr.VariableName.GetValue()
 	default:
 		panic(fmt.Sprintf("unexpected record key expression type: %T", key.Expr))
 	}
@@ -2215,7 +2242,7 @@ func isIsolatedFuncInner[A analyzer](a A, node ast.BLangNode) {
 			}
 		case *ast.BLangSimpleVarRef:
 			sym := a.ctx().GetSymbol(inner.Symbol())
-			varSym, ok := sym.(*model.ValueSymbol)
+			varSym, ok := sym.(model.ValueSymbol)
 			if !ok {
 				analyzer.unimplementedErr("unsupported reference in isolated function body", inner.GetPosition())
 				return true

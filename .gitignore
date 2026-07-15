@@ -58,3 +58,10 @@ parser/testdata/**/*.json
 
 # Local wayfinder backlog (ls-iteration skill) — working state, never committed
 .scratch/
+
+# Coverage report and local agent/editor state
+coverage_report.html
+.claude/
+
+# Ephemeral report produced by the validate-stdlib-contract skill
+CONTRACT_VALIDATION.md

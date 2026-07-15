@@ -27,6 +27,7 @@ import (
 	"ballerina-lang-go/parser/tree"
 	"ballerina-lang-go/semtypes"
 	"ballerina-lang-go/tools/diagnostics"
+	"ballerina-lang-go/values"
 )
 
 type BNodeWithSymbol interface {
@@ -69,18 +70,23 @@ type (
 
 	BLangAnnotation struct {
 		bLangNodeBase
-		Name                            *BLangIdentifier
+		Name                            IdentifierNode
+		symbol                          model.SymbolRef
 		AnnAttachments                  []BLangAnnotationAttachment
 		MarkdownDocumentationAttachment *BLangMarkdownDocumentation
 		typeDescriptor                  TypeDescriptor
 		attachPoints                    common.UnorderedSet[AttachPoint]
+		flags                           model.Flag
 	}
 
 	BLangAnnotationAttachment struct {
 		bLangNodeBase
-		Expr           BLangExpression
-		AnnotationName *BLangIdentifier
-		PkgAlias       *BLangIdentifier
+		Expr            BLangExpression
+		HasValue        bool
+		AnnotationName  *BLangIdentifier
+		PkgAlias        *BLangIdentifier
+		symbol          model.SymbolRef
+		AnnotationValue values.AnnotationValue
 	}
 
 	bLangFunctionBodyBase struct {
@@ -142,7 +148,7 @@ type (
 
 	BLangClassDefinition struct {
 		classDefnBase
-		Name   *BLangIdentifier
+		Name   IdentifierNode
 		symbol model.SymbolRef
 	}
 
@@ -224,12 +230,12 @@ type (
 
 	BLangConstant struct {
 		BLangVariableBase
-		Name *BLangIdentifier
+		Name IdentifierNode
 	}
 
 	BLangSimpleVariable struct {
 		BLangVariableBase
-		Name *BLangIdentifier
+		Name IdentifierNode
 	}
 
 	ClosureVarSymbol struct {
@@ -238,13 +244,14 @@ type (
 
 	bLangInvokableNodeBase struct {
 		bLangNodeBase
-		Name                            BLangIdentifier
+		Name                            IdentifierNode
 		symbol                          model.SymbolRef
 		AnnAttachments                  []BLangAnnotationAttachment
 		MarkdownDocumentationAttachment *BLangMarkdownDocumentation
 		RequiredParams                  []BLangSimpleVariable
 		RestParam                       SimpleVariableNode
-		returnTypeDescriptor            TypeDescriptor
+		returnTypeDescriptor            *BLangReturnTypeDescriptor
+		ParamListPos                    Location // range from ( to ) inclusive
 		Body                            FunctionBodyNode
 		flags                           model.Flag
 		scope                           model.Scope
@@ -268,7 +275,7 @@ type (
 
 	BLangTypeDefinition struct {
 		bLangNodeBase
-		Name                            *BLangIdentifier
+		Name                            IdentifierNode
 		symbol                          model.SymbolRef
 		typeData                        TypeData
 		annAttachments                  []BLangAnnotationAttachment
@@ -357,8 +364,13 @@ func (b *BLangTypeDefinition) SetPublic()        { b.flags |= model.FlagPublic }
 func (b *BLangTypeDefinition) SetAnonymous()     { b.flags |= model.FlagAnonymous }
 func (b *BLangTypeDefinition) SetDistinct()      { b.flags |= model.FlagDistinct }
 
+func (b *BLangAnnotation) IsPublic() bool { return b.flags.Has(model.FlagPublic) }
+func (b *BLangAnnotation) IsConst() bool  { return b.flags.Has(model.FlagConstant) }
+func (b *BLangAnnotation) SetPublic()     { b.flags |= model.FlagPublic }
+func (b *BLangAnnotation) SetConst()      { b.flags |= model.FlagConstant }
+
 // Stub IsPublic for types with no flags
-func (b *BLangAnnotation) IsPublic() bool     { return false }
+func (b *BLangService) IsPublic() bool        { return false }
 func (b *BLangMemberTypeDesc) IsPublic() bool { return false }
 
 func (b *bLangNodeBase) SetDeterminedType(ty semtypes.SemType) {
@@ -425,8 +437,26 @@ func (n *BLangTypeDefinition) SetSymbol(symbolRef model.SymbolRef) {
 	n.symbol = symbolRef
 }
 
+func (n *BLangAnnotation) Symbol() model.SymbolRef {
+	return n.symbol
+}
+
+func (n *BLangAnnotation) SetSymbol(symbolRef model.SymbolRef) {
+	n.symbol = symbolRef
+}
+
+func (n *BLangAnnotationAttachment) Symbol() model.SymbolRef {
+	return n.symbol
+}
+
+func (n *BLangAnnotationAttachment) SetSymbol(symbolRef model.SymbolRef) {
+	n.symbol = symbolRef
+}
+
 var (
 	_ AnnotationAttachmentNode                    = &BLangAnnotationAttachment{}
+	_ BNodeWithSymbol                             = &BLangAnnotation{}
+	_ BNodeWithSymbol                             = &BLangAnnotationAttachment{}
 	_ ImportPackageNode                           = &BLangImportPackage{}
 	_ ClassDefinition                             = &BLangClassDefinition{}
 	_ NodeWithScope                               = &BLangClassDefinition{}
@@ -509,11 +539,11 @@ func (b *BLangAnnotationAttachment) SetExpressionNode(expr BLangExpression) {
 	b.Expr = expr
 }
 
-func (b *BLangAnnotation) GetName() *BLangIdentifier {
+func (b *BLangAnnotation) GetName() IdentifierNode {
 	return b.Name
 }
 
-func (b *BLangAnnotation) SetName(name *BLangIdentifier) {
+func (b *BLangAnnotation) SetName(name IdentifierNode) {
 	b.Name = name
 }
 
@@ -530,6 +560,28 @@ func (b *BLangAnnotation) SetTypeDescriptor(typeDescriptor TypeDescriptor) {
 		return
 	}
 	b.typeDescriptor = typeDescriptor.(BType)
+}
+
+// AddAttachPoint adds an attachment point and is safe on a zero-value annotation.
+func (b *BLangAnnotation) AddAttachPoint(attachPoint AttachPoint) {
+	b.attachPoints.Add(attachPoint)
+}
+
+func (b *BLangAnnotation) AttachPoints() []AttachPoint {
+	result := []AttachPoint{}
+	for attachPoint := range b.attachPoints.Values() {
+		result = append(result, attachPoint)
+	}
+	return result
+}
+
+func (b *BLangAnnotation) HasSourceAttachPoint() bool {
+	for attachPoint := range b.attachPoints.Values() {
+		if attachPoint.Source {
+			return true
+		}
+	}
+	return false
 }
 
 func (b *BLangAnnotation) GetAnnotationAttachments() []AnnotationAttachmentNode {
@@ -644,11 +696,11 @@ func (b *classDefnBase) PopUnresolvedInclusions() []*BLangUserDefinedType {
 	return inclusions
 }
 
-func (b *BLangClassDefinition) GetName() *BLangIdentifier {
+func (b *BLangClassDefinition) GetName() IdentifierNode {
 	return b.Name
 }
 
-func (b *BLangClassDefinition) SetName(name *BLangIdentifier) {
+func (b *BLangClassDefinition) SetName(name IdentifierNode) {
 	b.Name = name
 }
 
@@ -762,11 +814,11 @@ func (b *BLangCompilationUnit) SetPackageID(packageID *model.PackageID) {
 	b.packageID = packageID
 }
 
-func (b *BLangConstant) GetName() *BLangIdentifier {
+func (b *BLangConstant) GetName() IdentifierNode {
 	return b.Name
 }
 
-func (b *BLangConstant) SetName(name *BLangIdentifier) {
+func (b *BLangConstant) SetName(name IdentifierNode) {
 	b.Name = name
 }
 
@@ -801,11 +853,11 @@ func (b *BLangConstant) GetAssociatedType() semtypes.SemType {
 	return semtypes.SemType{}
 }
 
-func (b *BLangSimpleVariable) GetName() *BLangIdentifier {
+func (b *BLangSimpleVariable) GetName() IdentifierNode {
 	return b.Name
 }
 
-func (b *BLangSimpleVariable) SetName(name *BLangIdentifier) {
+func (b *BLangSimpleVariable) SetName(name IdentifierNode) {
 	b.Name = name
 }
 
@@ -965,15 +1017,11 @@ const (
 )
 
 func (b *bLangInvokableNodeBase) GetName() IdentifierNode {
-	return &b.Name
+	return b.Name
 }
 
 func (b *bLangInvokableNodeBase) SetName(name IdentifierNode) {
-	if id, ok := name.(*BLangIdentifier); ok {
-		b.Name = *id
-	} else {
-		panic("name is not a BLangIdentifier")
-	}
+	b.Name = name
 }
 
 func (b *bLangInvokableNodeBase) GetAnnotationAttachments() []AnnotationAttachmentNode {
@@ -1010,6 +1058,55 @@ func (b *bLangInvokableNodeBase) SetMarkdownDocumentationAttachment(markdownDocu
 	} else {
 		panic("markdownDocumentationAttachment is not a BLangMarkdownDocumentation")
 	}
+}
+
+// BLangReturnTypeDescriptor is the return type descriptor of an invokable node.
+// It holds both the return type and its annotation attachments.
+type BLangReturnTypeDescriptor struct {
+	bLangNodeBase
+	TypeDescriptor BType
+	AnnAttachments []BLangAnnotationAttachment
+}
+
+func (r *BLangReturnTypeDescriptor) IsPublic() bool { return false }
+
+func (r *BLangReturnTypeDescriptor) AddAnnotationAttachment(ann AnnotationAttachmentNode) {
+	r.AnnAttachments = append(r.AnnAttachments, *ann.(*BLangAnnotationAttachment))
+}
+
+func (r *BLangReturnTypeDescriptor) GetAnnotationAttachments() []AnnotationAttachmentNode {
+	result := make([]AnnotationAttachmentNode, len(r.AnnAttachments))
+	for i := range r.AnnAttachments {
+		result[i] = &r.AnnAttachments[i]
+	}
+	return result
+}
+
+func (r *BLangReturnTypeDescriptor) IsGrouped() bool { return r.innerType().IsGrouped() }
+
+func (r *BLangReturnTypeDescriptor) SetTypeData(ty TypeData) { r.innerType().SetTypeData(ty) }
+
+func (r *BLangReturnTypeDescriptor) GetTypeData() TypeData { return r.innerType().GetTypeData() }
+
+func (r *BLangReturnTypeDescriptor) BTypeGetTag() TypeTags { return r.innerType().BTypeGetTag() }
+
+func (r *BLangReturnTypeDescriptor) BTypeSetTag(tag TypeTags) { r.innerType().BTypeSetTag(tag) }
+
+func (r *BLangReturnTypeDescriptor) bTypeGetName() model.Name { return r.innerType().bTypeGetName() }
+
+func (r *BLangReturnTypeDescriptor) bTypeSetName(name model.Name) { r.innerType().bTypeSetName(name) }
+
+func (r *BLangReturnTypeDescriptor) bTypeGetFlags() model.Flag { return r.innerType().bTypeGetFlags() }
+
+func (r *BLangReturnTypeDescriptor) bTypeSetFlags(flags model.Flag) {
+	r.innerType().bTypeSetFlags(flags)
+}
+
+func (r *BLangReturnTypeDescriptor) innerType() BType {
+	if r.TypeDescriptor == nil {
+		panic("BLangReturnTypeDescriptor has nil TypeDescriptor")
+	}
+	return r.TypeDescriptor
 }
 
 func (b *bLangInvokableNodeBase) GetParameters() []SimpleVariableNode {
@@ -1069,7 +1166,10 @@ func (b *bLangInvokableNodeBase) HasBody() bool {
 	return b.Body != nil
 }
 
-func (b *bLangInvokableNodeBase) GetReturnTypeDescriptor() TypeDescriptor {
+func (b *bLangInvokableNodeBase) GetReturnTypeDescriptor() ReturnTypeDescriptor {
+	if b.returnTypeDescriptor == nil {
+		return nil
+	}
 	return b.returnTypeDescriptor
 }
 
@@ -1078,7 +1178,26 @@ func (b *bLangInvokableNodeBase) SetReturnTypeDescriptor(typeDescriptor TypeDesc
 		b.returnTypeDescriptor = nil
 		return
 	}
-	b.returnTypeDescriptor = typeDescriptor.(BType)
+	bType := typeDescriptor.(BType)
+	if b.returnTypeDescriptor == nil {
+		b.returnTypeDescriptor = &BLangReturnTypeDescriptor{}
+	}
+	b.returnTypeDescriptor.TypeDescriptor = bType
+	b.returnTypeDescriptor.SetPosition(bType.GetPosition())
+}
+
+// ReturnTypeDescriptorNode returns the return type descriptor node, which carries
+// the return type's annotation attachments, or nil if there is none.
+func (b *bLangInvokableNodeBase) ReturnTypeDescriptorNode() *BLangReturnTypeDescriptor {
+	return b.returnTypeDescriptor
+}
+
+func (b *bLangInvokableNodeBase) HasExplicitReturnTypeDescriptor() bool {
+	return b.flags.Has(model.FlagExplicitReturnTypeDescriptor)
+}
+
+func (b *bLangInvokableNodeBase) SetExplicitReturnTypeDescriptor() {
+	b.flags |= model.FlagExplicitReturnTypeDescriptor
 }
 
 func (b *bLangInvokableNodeBase) GetBody() FunctionBodyNode {
@@ -1154,11 +1273,11 @@ func NewBLangTypeDefinition() *BLangTypeDefinition {
 	return b
 }
 
-func (b *BLangTypeDefinition) GetName() *BLangIdentifier {
+func (b *BLangTypeDefinition) GetName() IdentifierNode {
 	return b.Name
 }
 
-func (b *BLangTypeDefinition) SetName(name *BLangIdentifier) {
+func (b *BLangTypeDefinition) SetName(name IdentifierNode) {
 	b.Name = name
 }
 
@@ -1410,15 +1529,6 @@ func (b *BLangTestablePackage) AddIsLegacyMockingMap(id string, isLegacy bool) {
 	b.isLegacyMockingMap[id] = isLegacy
 }
 
-func createSimpleVariableNodeWithLocationTokenLocation(location diagnostics.Location, identifier tree.Token, identifierPos diagnostics.Location) *BLangSimpleVariable {
-	memberVar := createSimpleVariableNode()
-	memberVar.pos = location
-	name := createIdentifierFromToken(identifierPos, identifier)
-	BLangNode(&name).SetPosition(identifierPos)
-	memberVar.SetName(&name)
-	return memberVar
-}
-
 func createSimpleVariableNode() *BLangSimpleVariable {
 	return &BLangSimpleVariable{}
 }
@@ -1460,7 +1570,7 @@ func addCompilationUnitNodesToPackage(p *BLangPackage, compilationUnit *BLangCom
 		case *BLangSimpleVariable:
 			p.GlobalVars = append(p.GlobalVars, *node)
 		case *BLangFunction:
-			if node.Name.Value == "init" {
+			if node.Name.GetValue() == "init" {
 				p.InitFunction = node
 			} else {
 				p.Functions = append(p.Functions, *node)

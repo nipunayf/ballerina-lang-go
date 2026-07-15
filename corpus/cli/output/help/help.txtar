@@ -5,11 +5,13 @@ Usage:
   bal [command]
 
 Available Commands:
-  completion  Generate the autocompletion script for the specified shell
-  help        Help about any command
-  new         Create a new Ballerina package
-  run         Build and run the current package or a Ballerina source file
-  version     Print the Ballerina version
+  completion            Generate the autocompletion script for the specified shell
+  help                  Help about any command
+  new                   Create a new Ballerina package
+  pack                  Create the distribution format (.bala) of the current package
+  run                   Build and run the current package or a Ballerina source file
+  start-language-server Start the Ballerina language server over stdio (LSP)
+  version               Print the Ballerina version
 
 Flags:
   -h, --help      help for bal
