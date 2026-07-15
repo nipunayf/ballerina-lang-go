@@ -240,14 +240,13 @@ func TestUpdateSingleFile(t *testing.T) {
 
 // TestProjectDuplicate tests duplicating a single file project.
 //
-// Skipped: Duplicate() creates a fresh documentContext whose lazy-loaded
-// text.TextDocument is a new pointer with the same content. Compiling the
-// duplicated project re-registers the same fileName under a different doc
-// pointer, which trips DiagnosticEnv.RegisterFile's same-name-different-doc
-// panic. Re-enable once DiagnosticEnv supports per-instance file identity
-// (e.g., keyed on PackageID UUID).
+// Both the original and the duplicated project share a CompilerEnvironment
+// (Environment.Duplicate shares the compilerEnv), so they share one
+// DiagnosticEnv. Under the ticket-09 prerequisite the env namespaces file
+// registrations by compile instance, so compiling the duplicate (which
+// re-registers the same fileName under a new doc pointer) allocates a new
+// file index instead of panicking. This is the end-to-end prerequisite bar.
 func TestProjectDuplicate(t *testing.T) {
-	t.Skip("DiagnosticEnv panics on Duplicate(): same fileName, different doc pointer")
 
 	assert := test_util.New(t)
 	require := test_util.NewRequire(t)

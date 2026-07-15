@@ -65,6 +65,10 @@ func (c *PackageCompilation) compile() {
 
 // compileModulesInternal performs the actual compilation of all modules.
 func (c *PackageCompilation) compileModulesInternal() {
+	de := c.compilerEnv.DiagnosticEnv()
+	inst := de.BeginCompile()
+	defer de.EndCompile(inst)
+
 	var allDiagnostics []diagnostics.Diagnostic
 
 	// Add resolution diagnostics
@@ -78,11 +82,13 @@ func (c *PackageCompilation) compileModulesInternal() {
 
 	// Add compilation diagnostics if no resolution errors
 	if !c.packageResolution.DiagnosticResult().HasErrors() {
-		// Register all module source files with the shared DiagnosticEnv using
 		// Register source files with the shared DiagnosticEnv. The key includes
 		// a per-package prefix (see documentContext.diagKeyPrefix) so same-basename
-		// files across packages don't collide.
-		de := c.compilerEnv.DiagnosticEnv()
+		// files across packages don't collide. Under the ticket-09 prerequisite the
+		// env is shared and persistent per source root; BeginCompile namespaced the
+		// registration by compile instance so re-compiling the same root allocates
+		// new indices for changed files and no-ops for unchanged ones (by doc
+		// pointer), keeping symbol-Locations stable across generations.
 		for _, moduleCtx := range c.packageResolution.topologicallySortedModuleList {
 			for _, docCtx := range moduleCtx.srcDocContextMap {
 				de.RegisterFile(docCtx.registrationKey(), docCtx.getTextDocument())
