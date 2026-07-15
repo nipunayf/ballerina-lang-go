@@ -30,11 +30,11 @@ import (
 	"ballerina-lang-go/platform/palnative"
 )
 
-func newCoreServices() (*workspace.ProjectService, *compile.CompilationService) {
+func newCoreServices() (*workspace.ProjectService, *compile.CompilationService, *event.Bus) {
 	platform, _ := palnative.NewPlatform()
 	bus := event.New()
 	projects := workspace.New(platform, bus)
-	return projects, compile.New(projects, bus)
+	return projects, compile.New(projects, bus, compile.WithDebounce(0)), bus
 }
 
 type pipeTransport struct {
@@ -58,14 +58,15 @@ func newTestSession(t *testing.T, versionSupport bool) *testSession {
 	serverRead, clientWrite := io.Pipe()
 	clientRead, serverWrite := io.Pipe()
 	transport := pipeTransport{reader: serverRead, writer: serverWrite}
-	projects, compiler := newCoreServices()
+	projects, compiler, bus := newCoreServices()
 	session := &testSession{
 		t:       t,
-		server:  New(transport, projects, compiler),
+		server:  New(transport, projects, compiler, bus),
 		clientW: clientWrite,
 		clientR: bufio.NewReader(clientRead),
 		done:    make(chan error, 1),
 	}
+	t.Cleanup(func() { compiler.Shutdown(); bus.Close() })
 	go func() { session.done <- session.server.Serve() }()
 	session.initialize(versionSupport)
 	return session
@@ -297,10 +298,11 @@ func TestPublishDiagnosticsTransportErrorReachesServe(t *testing.T) {
 	serverRead, clientWrite := io.Pipe()
 	clientRead, serverWrite := io.Pipe()
 	transport := pipeTransport{reader: serverRead, writer: serverWrite}
-	projects, compiler := newCoreServices()
-	server := New(transport, projects, compiler)
+	projects, compiler, bus := newCoreServices()
+	server := New(transport, projects, compiler, bus)
 	done := make(chan error, 1)
 	go func() { done <- server.Serve() }()
+	t.Cleanup(func() { compiler.Shutdown(); bus.Close() })
 
 	session := &testSession{t: t, server: server, clientW: clientWrite, clientR: bufio.NewReader(clientRead), done: done}
 	session.initialize(true)
@@ -316,14 +318,135 @@ func TestPublishDiagnosticsTransportErrorReachesServe(t *testing.T) {
 			Text:       "public function main() {}\n",
 		},
 	})
+	// Under ticket 09 didOpen no longer writes synchronously; publishDiagnostics
+	// arrives out-of-band via the CE subscriber. Closing the client's write end
+	// (EOF to the server) lets Serve return. The async CE publish, running on a
+	// drainer goroutine against the already-closed server write end, must not
+	// crash the server; its write error is contained by writeMu + the engine's
+	// shutdown drain.
+	_ = clientWrite.Close()
 	select {
 	case err := <-done:
-		if err == nil {
-			t.Fatal("Serve returned nil, want a transport write error")
+		if err != nil {
+			t.Fatalf("Serve returned %v, want nil (clean EOF; async write error contained)", err)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("Serve did not return after transport write failure")
+		t.Fatal("Serve did not return on EOF")
 	}
-	_ = clientWrite.Close()
 	_ = clientRead.Close()
+}
+
+// TestCancelRequestRoutesAsNotification verifies the $/cancelRequest mapping
+// (design branch 3) at the protocol/server routing boundary: it is handled as
+// a notification (no response is written), it does not crash the dispatch
+// loop, and the server continues processing subsequent notifications. The
+// semantic effect (CE-E3 gating) is covered by the compile-engine test.
+func TestCancelRequestRoutesAsNotification(t *testing.T) {
+	session := newTestSession(t, true)
+	defer session.close()
+
+	// $/cancelRequest before any document: Cancel applies to zero active roots
+	// (a no-op) and must not produce a response or break the dispatch loop.
+	session.sendNotification("$/cancelRequest", protocol.CancelParams{
+		ID: protocol.NewOrCancelParamsIdString("1"),
+	})
+
+	const uri = "file:///workspace/cancel.bal"
+	session.sendNotification("textDocument/didOpen", protocol.DidOpenTextDocumentParams{
+		TextDocument: protocol.TextDocumentItem{
+			URI:        uri,
+			LanguageID: "ballerina",
+			Version:    1,
+			Text:       "public function main() {\n    int x = 1;\n}\n",
+		},
+	})
+
+	// The first message the client receives must be the publishDiagnostics for
+	// the didOpen — proving $/cancelRequest wrote no response and dispatch
+	// continued normally.
+	published := decodePublishDiagnostics(t, session.receive(t))
+	if published.URI != uri {
+		t.Fatalf("first message URI = %q, want %q (a $/cancelRequest response must not precede it)", published.URI, uri)
+	}
+	if published.Version.IsSet() {
+		ver, _ := published.Version.Value()
+		if ver != 1 {
+			t.Fatalf("version = %v, want 1", ver)
+		}
+	}
+}
+
+// TestDedupNotStaleAfterEviction verifies the CE publish dedup does not
+// suppress a reloaded source root's diagnostics behind a stale high-water
+// mark left by an evicted previous incarnation. With WithMaxProjects(1):
+// open /a (gen 1, publish), close /a (background), open /b (evicts /a,
+// clearing lastPublished["/a"]), then reopen /a — its gen-1 reload must
+// still publish. Without the ProjectEvicted clear (or with a <= guard) the
+// reload's first publish would be dropped.
+func TestDedupNotStaleAfterEviction(t *testing.T) {
+	serverRead, clientWrite := io.Pipe()
+	clientRead, serverWrite := io.Pipe()
+	transport := pipeTransport{reader: serverRead, writer: serverWrite}
+	platform, _ := palnative.NewPlatform()
+	bus := event.New()
+	projects := workspace.New(platform, bus, workspace.WithMaxProjects(1))
+	compiler := compile.New(projects, bus, compile.WithDebounce(0))
+	server := New(transport, projects, compiler, bus)
+	done := make(chan error, 1)
+	go func() { done <- server.Serve() }()
+	t.Cleanup(func() { compiler.Shutdown(); bus.Close(); _ = clientWrite.Close(); _ = clientRead.Close(); <-done })
+
+	session := &testSession{t: t, server: server, clientW: clientWrite, clientR: bufio.NewReader(clientRead), done: done}
+	session.initialize(true)
+
+	const (
+		uriA = "file:///a/dedup-a.bal"
+		uriB = "file:///b/dedup-b.bal"
+	)
+	text := "public function main() {\n int x = 1;\n}\n"
+
+	session.sendNotification("textDocument/didOpen", protocol.DidOpenTextDocumentParams{
+		TextDocument: protocol.TextDocumentItem{URI: uriA, LanguageID: "ballerina", Version: 1, Text: text},
+	})
+	_ = decodePublishDiagnostics(t, session.receive(t)) // gen 1 for /a
+
+	session.sendNotification("textDocument/didClose", protocol.DidCloseTextDocumentParams{
+		TextDocument: protocol.TextDocumentIdentifier{URI: uriA},
+	})
+	_ = decodePublishDiagnostics(t, session.receive(t)) // clear for /a
+
+	// Open /b: with WithMaxProjects(1) this evicts /a (the only, now-background,
+	// root), publishing ProjectEvicted and clearing the dedup mark for /a.
+	session.sendNotification("textDocument/didOpen", protocol.DidOpenTextDocumentParams{
+		TextDocument: protocol.TextDocumentItem{URI: uriB, LanguageID: "ballerina", Version: 1, Text: text},
+	})
+	_ = decodePublishDiagnostics(t, session.receive(t)) // gen 1 for /b
+
+	// Reopen /a: the root reloads at gen 1. The dedup must NOT suppress this
+	// behind the stale lastPublished["/a"] == 1 from the first incarnation.
+	session.sendNotification("textDocument/didOpen", protocol.DidOpenTextDocumentParams{
+		TextDocument: protocol.TextDocumentItem{URI: uriA, LanguageID: "ballerina", Version: 1, Text: text},
+	})
+
+	select {
+	case msg := <-session.recv():
+		published := decodePublishDiagnostics(t, msg)
+		if published.URI != uriA {
+			t.Fatalf("reopen publish URI = %q, want %q", published.URI, uriA)
+		}
+		if len(published.Diagnostics) == 0 {
+			t.Fatal("reopen publish dropped the reload's diagnostics (dedup stale after eviction)")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("reopen of evicted root produced no publishDiagnostics (dedup suppressed the reload)")
+	}
+}
+
+// recv returns a channel that yields the next framed message, so a test can
+// select on it with a timeout instead of blocking forever when a publish is
+// wrongly suppressed.
+func (s *testSession) recv() <-chan protocol.Message {
+	ch := make(chan protocol.Message, 1)
+	go func() { ch <- s.receive(s.t) }()
+	return ch
 }

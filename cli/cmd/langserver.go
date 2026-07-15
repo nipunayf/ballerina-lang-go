@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"os"
 
 	"ballerina-lang-go/ls/core/compile"
@@ -49,9 +50,18 @@ func startLangServer(cmd *cobra.Command, args []string) error {
 	defer cleanup()
 
 	bus := event.New()
-	defer bus.Close()
 	projects := workspace.New(platform, bus)
 	compiler := compile.New(projects, bus)
-	srv := server.New(stdioTransport{}, projects, compiler)
+	srv := server.New(stdioTransport{}, projects, compiler, bus)
+
+	// Bounded shutdown drain (branch 9 ordering): the workspace marks every
+	// in-flight generation superseded; the compile engine then stops its
+	// debounce timers, bounded-waits for in-flight compiles to finish (their
+	// results gated out by the closed flag), and bus.Flush()es the CRITICAL
+	// delivery channels; the bus closes last so that Flush drains before close.
+	// Defers run LIFO, so execution order is projects → compiler → bus.
+	defer bus.Close()
+	defer compiler.Shutdown()
+	defer projects.Shutdown(context.Background())
 	return srv.Serve()
 }
