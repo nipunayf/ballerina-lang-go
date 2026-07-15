@@ -303,6 +303,9 @@ func (s *Server) handleDidClose(params json.RawMessage) error {
 }
 
 func (s *Server) publishDiagnostics(uri string, version int32, includeVersion bool, diagnostics []protocol.Diagnostic) *protocol.Notification {
+	if diagnostics == nil {
+		diagnostics = []protocol.Diagnostic{}
+	}
 	params := protocol.PublishDiagnosticsParams{
 		URI:         uri,
 		Diagnostics: diagnostics,

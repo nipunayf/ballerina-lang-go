@@ -88,7 +88,7 @@
       "method": "textDocument/publishDiagnostics",
       "params": {
         "uri": "file://${root}/modules/util/foo.bal",
-        "diagnostics": null
+        "diagnostics": []
       }
     }
   ]

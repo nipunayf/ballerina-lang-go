@@ -233,7 +233,17 @@ func TestPublishDiagnosticsAfterOpenChangeClose(t *testing.T) {
 	session.sendNotification("textDocument/didClose", protocol.DidCloseTextDocumentParams{
 		TextDocument: protocol.TextDocumentIdentifier{URI: uri},
 	})
-	onClose := decodePublishDiagnostics(t, session.receive(t))
+	onCloseMessage := session.receive(t)
+	onClose := decodePublishDiagnostics(t, onCloseMessage)
+	var onCloseParams struct {
+		Diagnostics json.RawMessage `json:"diagnostics"`
+	}
+	if err := json.Unmarshal(onCloseMessage.Params, &onCloseParams); err != nil {
+		t.Fatalf("unmarshal close params: %v", err)
+	}
+	if string(onCloseParams.Diagnostics) != "[]" {
+		t.Fatalf("close diagnostics JSON = %s, want []", onCloseParams.Diagnostics)
+	}
 	if onClose.URI != uri {
 		t.Fatalf("close URI = %q, want %q", onClose.URI, uri)
 	}

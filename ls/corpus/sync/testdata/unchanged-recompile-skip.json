@@ -139,7 +139,7 @@
       "method": "textDocument/publishDiagnostics",
       "params": {
         "uri": "file:///workspace/unchanged-recompile-skip.bal",
-        "diagnostics": null
+        "diagnostics": []
       }
     }
   ]

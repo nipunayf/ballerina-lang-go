@@ -148,7 +148,7 @@
       "method": "textDocument/publishDiagnostics",
       "params": {
         "uri": "file:///workspace/incremental_edit.bal",
-        "diagnostics": null
+        "diagnostics": []
       }
     }
   ]

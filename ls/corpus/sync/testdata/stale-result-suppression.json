@@ -109,7 +109,7 @@
       "method": "textDocument/publishDiagnostics",
       "params": {
         "uri": "file:///workspace/stale-result-suppression.bal",
-        "diagnostics": null
+        "diagnostics": []
       }
     }
   ]

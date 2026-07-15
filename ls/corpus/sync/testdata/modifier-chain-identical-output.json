@@ -190,7 +190,7 @@
       "method": "textDocument/publishDiagnostics",
       "params": {
         "uri": "file:///workspace/modifier-chain-identical-output.bal",
-        "diagnostics": null
+        "diagnostics": []
       }
     },
     {
@@ -198,7 +198,7 @@
       "method": "textDocument/publishDiagnostics",
       "params": {
         "uri": "file:///other/modifier-chain-fresh.bal",
-        "diagnostics": null
+        "diagnostics": []
       }
     }
   ]
