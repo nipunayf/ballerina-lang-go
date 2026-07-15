@@ -56,4 +56,4 @@ Shared config: research/record paths in `sources.md` next to this file. Conventi
 
 8. **Verify** — invoke `manage-ls-fixtures` to add the scenario fixtures and run the gates. Green means the LS suite, `go build ./...`, and `go vet ./ls/...` all pass.
 
-9. **Record + resolve** — invoke `ls-record` (record mode: commit on green, wiki note finalization, crosswalk, ADR draft), then `ls-backlog` (resolve the ticket, graduate fog, tend out-of-scope).
+9. **Record + resolve** — invoke `ls-record` (record mode: wiki note finalization, crosswalk, ADR draft), then `ls-backlog` (resolve the ticket, graduate fog, tend out-of-scope).
