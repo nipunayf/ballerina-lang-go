@@ -1,7 +1,7 @@
 // Copyright (c) 2026, WSO2 LLC. (http://www.wso2.com).
 //
 // WSO2 LLC. licenses this file to you under the Apache License,
-// Version 2.0 ( the "License"); you may not use this file except
+// Version 2.0 (the "License"); you may not use this file except
 // in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -151,11 +151,12 @@ func TestResolveMemoizesSourceRootWalk(t *testing.T) {
 		t.Fatalf("second Apply: %v", err)
 	}
 	second := f.statCalls
-	// The ADR-048 ancestor walk is memoized: the second Apply must not re-walk
-	// /w/Ballerina.toml and /Ballerina.toml. The only additional Stat is the
-	// single Ballerina.toml probe inside loadProject (one per publish). If the
-	// walk had repeated, the delta would be >= 3.
-	if delta := second - first; delta != 1 {
-		t.Fatalf("stat delta after second Apply = %d, want 1 (walk should be memoized)", delta)
+	// Under ticket 09's modifier-chain publication model a content update does
+	// NOT reload: it reuses the persistent project via Document.Modify().Apply(),
+	// so the ADR-048 walk is memoized AND no loadProject Ballerina.toml probe
+	// runs. The stat delta is 0 (vs 08's 1-per-publish reload). If the walk had
+	// repeated, the delta would be >= 3.
+	if delta := second - first; delta != 0 {
+		t.Fatalf("stat delta after second Apply = %d, want 0 (modifier chain must not reload on update)", delta)
 	}
 }
