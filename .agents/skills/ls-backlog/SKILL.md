@@ -1,14 +1,16 @@
 ---
 name: ls-backlog
-description: Operate the LS wayfinder backlog in .scratch/ls/ — pick/claim/create/resolve tickets, chart new ones when the frontier is empty, tend fog and out-of-scope. Use at the bookends of an ls-iteration, or standalone when the user wants to chart, groom, or inspect the LS backlog.
+description: Operate the LS wayfinder backlog in docs/raw/ls-backlog/ — pick/claim/create/resolve tickets, chart new ones when the frontier is empty, tend fog and out-of-scope. Use at the bookends of an ls-iteration, or standalone when the user wants to chart, groom, or inspect the LS backlog.
 ---
 
-The LS backlog is a wayfinder-style local-markdown tracker — untracked working state (`.scratch/` is gitignored; never commit it). Durable content migrates to the wiki (see "Resolve" and "Milestone fold").
+The LS backlog is a wayfinder-style markdown tracker living under `docs/raw/ls-backlog/` in the docs vault — a separate repo from this worktree, so nothing here is committed to `ls`. Curating any of it into the indexed wiki (see "Resolve" and "Milestone fold") is the docs vault's own concern, not this skill's — this skill only reads/writes the raw working state.
 
 ## Layout
 
-- **Map**: `.scratch/ls/map.md` — Destination / Notes / Decisions so far / Not yet specified (fog) / Out of scope. An **index**, not a store: decisions are one-line gists linking the ticket or wiki note that holds the detail.
-- **Tickets**: `.scratch/ls/issues/NN-<slug>.md`, numbered from `01`. Header lines: `Type:`, `Status:` (`open`/`claimed`/`resolved`), `Blocked by: NN, NN` (or `none`). Body is the `## Question`; the `## Answer` is appended at resolution.
+- **Map**: `docs/raw/ls-backlog/map.md` — Destination / Notes / Decisions so far / Not yet specified (fog) / Out of scope. An **index**, not a store: decisions are one-line gists linking the ticket or decision doc that holds the detail.
+- **Tickets**: `docs/raw/ls-backlog/issues/NN-<slug>.md`, numbered from `01`. Header lines: `Type:`, `Status:` (`open`/`claimed`/`resolved`), `Blocked by: NN, NN` (or `none`). Body is the `## Question`; the `## Answer` is appended at resolution.
+- **Research**: `docs/raw/ls-backlog/research/NN-<slug>.md` — the research-stage subagent fan-out's output for ticket `NN` (mechanics in `ls-iteration`), linked from that ticket.
+- **Design**: `docs/raw/ls-backlog/design/NN-<slug>.md` — the draft-design stage's output for ticket `NN` (non-durable HIL-gate input, superseded once the decision doc is persisted), linked from that ticket.
 - **Frontier**: open + unblocked + unclaimed tickets, lowest number first. A ticket is unblocked when every ticket it lists is `resolved`.
 
 ## Rules
@@ -49,7 +51,7 @@ Charting is one session's work; never also resolve a ticket. Grill **breadth-fir
 
 ## Resolve a ticket
 
-- Append the `## Answer`: one-line gist + pointers to the wiki note and/or commit — detail lives there, not in the ticket.
+- Append the `## Answer`: one-line gist + pointers to the decision doc and/or commit — detail lives there, not in the ticket.
 - Set `Status: resolved`.
 - Append a one-line context pointer to the map's Decisions so far.
 
@@ -58,4 +60,4 @@ Charting is one session's work; never also resolve a ticket. Grill **breadth-fir
 - **Graduate fog** the resolution made specifiable into new tickets (create-then-wire), clearing the graduated patch from Not yet specified.
 - **Out of scope**: work revealed to sit beyond the destination gets a one-line gist + why in that section; if it was already a ticket, close it and link it. Out-of-scope never graduates.
 - Update or delete tickets the decision invalidated.
-- **Milestone fold**: when a milestone's tickets are all resolved, fold that stretch of Decisions so far into the wiki (roadmap page or a decisions index) — the map must always be deletable without losing history.
+- **Milestone fold**: when a milestone's tickets are all resolved, fold that stretch of Decisions so far into the roadmap crosswalk (`language-server-roadmap.md`, in the wiki) — the map must always be deletable without losing history.

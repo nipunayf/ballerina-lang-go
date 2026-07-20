@@ -1,6 +1,6 @@
 # LS iteration — context input paths
 
-Shared config for the LS skill family (`ls-iteration`, `ls-backlog`, `ls-research`, `ls-record`, `manage-ls-fixtures`).
+Shared config for the LS skill family (`ls-iteration`, `ls-backlog`, `ls-record`, `manage-ls-fixtures`).
 
 Machine-local absolute paths for the research inputs and the record-stage targets.
 (Solo setup — paths are hardcoded for this machine. If a path is missing, say so and degrade
@@ -38,23 +38,24 @@ The language-server package is `lsp`; its protocol types are under `lsp/protocol
 reference is a library package rather than a standalone executable, so `go build ./lsp`
 is the compilation check.
 
-## Backlog (wayfinder map — untracked working state)
+## Backlog (wayfinder map — durable working state, docs vault)
 
 | Target | Path |
 |---|---|
-| Map | `.scratch/ls/map.md` (this worktree) |
-| Tickets | `.scratch/ls/issues/NN-<slug>.md` |
+| Map | `/Users/wso2/projects/ballerina/ballerina-go/docs/raw/ls-backlog/map.md` |
+| Tickets | `/Users/wso2/projects/ballerina/ballerina-go/docs/raw/ls-backlog/issues/NN-<slug>.md` |
+| Research (per ticket) | `/Users/wso2/projects/ballerina/ballerina-go/docs/raw/ls-backlog/research/NN-<slug>.md` |
+| Draft design (per ticket) | `/Users/wso2/projects/ballerina/ballerina-go/docs/raw/ls-backlog/design/NN-<slug>.md` |
 
-Never commit `.scratch/` — it is gitignored. Durable content migrates to the wiki at ticket resolution.
+Lives in the docs vault, a separate repo from this worktree — nothing here is committed to `ls`. Curating any of it into the indexed wiki is the docs vault's own concern, not this skill family's.
 
 ## Record-stage targets
 
 | Target | Path |
 |---|---|
-| Wiki (notes + crosswalk) | `/Users/wso2/projects/ballerina/ballerina-go/docs/wiki` |
-| Roadmap crosswalk | `/Users/wso2/projects/ballerina/ballerina-go/docs/wiki/concepts/language-server-roadmap.md` |
-| API coverage crosswalk | `/Users/wso2/projects/ballerina/ballerina-go/docs/wiki/concepts/language-server-api-coverage.md` |
-| Decision notes | `/Users/wso2/projects/ballerina/ballerina-go/docs/wiki/decisions/` |
+| Decision docs | `/Users/wso2/projects/ballerina/ballerina-go/docs/raw/decisions/` |
+| Roadmap crosswalk (wiki, direct edit) | `/Users/wso2/projects/ballerina/ballerina-go/docs/wiki/concepts/language-server-roadmap.md` |
+| API coverage crosswalk (wiki, direct edit) | `/Users/wso2/projects/ballerina/ballerina-go/docs/wiki/concepts/language-server-api-coverage.md` |
 | Architecture docs (reference-only) | `/Users/wso2/projects/ballerina/bls-docs/feat3` |
 
 ## Related references
