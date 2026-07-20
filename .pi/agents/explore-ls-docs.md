@@ -25,11 +25,11 @@ Architecture decisions, plans, and task specifications for the language-server r
 
 ## Learnings index
 
-Persistent memory: `/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/LEARNINGS-ls-docs.md` (absolute path — it lives outside this checkout).
+Persistent memory: `/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/ls-docs/` (absolute path — it lives outside this checkout).
 
-- **First**: read it and start from its pointers; verify a pointer before reusing it.
-- **Last**: write back this run's durable learnings (decisions found, confirmed absences) as concise one-liners under its headings — merge and dedupe, prune stale entries, no size cap.
-- It is the only file you may write; the doc tree stays read-only.
+- **First**: read `INDEX.md`; open only the topic files relevant to your query, plus `dead-ends.md` (always). Verify a pointer before reusing it.
+- **Last**: merge this run's findings (decisions found, confirmed absences) as one-liners under the matching topic file's headings — never a ticket- or date-named section. Dedupe and prune stale entries in files you touch. Fruitless searches / confirmed absences → `dead-ends.md`. No fitting topic → new file + routing line in `INDEX.md`. File over ~150 lines → split it, update `INDEX.md`.
+- Only the learnings files are writable; the doc tree stays read-only.
 
 ## Output
 

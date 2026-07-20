@@ -1,0 +1,45 @@
+# Backlog ticket tracking
+
+Dependency chain (current as of last update): 17→18→19→20/21→22→23→24/25. Also:
+20←12, 21←20, 22←18+21, 23←18, 24←12, 25←24, 16←12, 11←10, 12←10. `docs/raw/ls-backlog/map.md:Decisions so far §M4`
+
+- **Ticket 15 (semantic hover)** blocks no other ticket, `Blocked by: none`. Open frontier — map.md: "Implement semantic hover (15) is the next frontier." No design/ or research/ output exists yet. `docs/raw/ls-backlog/issues/15-implement-semantic-hover.md:1-4`, `docs/raw/ls-backlog/map.md:Not yet specified §M4`
+
+## Ticket 18 — statement and ordinary expression completion
+
+- **Status:** type=implement, status=claimed, blocked by=none. No research/design docs exist yet. `docs/raw/ls-backlog/issues/18-migrate-statement-and-ordinary-expression-completion.md`
+- **Java oracle contexts:** statement_context, expression_context, function_body, function_def, variable-declaration, let_expression, natural_expression, record_type_desc fixtures. `docs/raw/ls-backlog/issues/18-migrate-statement-and-ordinary-expression-completion.md:Java oracle`
+- **Statement contexts to migrate:** block/function-body/function-definition, assignment, variable declaration, return/fail/panic, if/while/foreach/fork, worker/send/receive/flush/wait. `docs/raw/ls-backlog/research/13-completion-migration.md:Java provider migration ledger §Statements/local scope`
+- **Expression contexts to migrate:** expression initializer, function/method/client-resource calls, named arguments, check, trap, typeof, casts/tests, list/mapping/object/error constructors, conditional/basic literals. `docs/raw/ls-backlog/research/13-completion-migration.md:Java provider migration ledger §Expressions/calls`
+- **No expected-type ranking in 18:** deferred to tickets 20/21 (expected-type completion projections). `docs/raw/decisions/2026-07-16-completion-vertical-slice.md:Consequences §deferred`
+- **18 extends the vertical-slice pattern:** non-blocking, exact-generation, recovery-aware syntax classification, core-private DTOs, server-only UTF-16/LSP adaptation. `docs/raw/decisions/2026-07-16-completion-vertical-slice.md:Decision`
+- **18 reuses the catalog pattern from 17:** copied current-project/embedded-stdlib catalog facts, exact-generation non-blocking lease. `docs/raw/decisions/2026-07-16-module-import-and-declaration-completion.md:Decision`
+- **18 must not:** scan files, resolve packages, use Central/network, parse, compile, schedule compilation, wait, or combine stale semantic facts with current text. `docs/raw/decisions/2026-07-16-completion-vertical-slice.md:Decision`
+- **Snippets for control-flow/worker constructs:** snippet-capable clients receive snippets; others get deterministic plaintext equivalents. `docs/raw/decisions/2026-07-16-module-import-and-declaration-completion.md:Decision`
+- **Deterministic item ordering:** fixed rank then label, no fuzzy/deep completion. `docs/raw/decisions/2026-07-16-completion-vertical-slice.md:Decision`
+- **Go PoC proves viable patterns but must not be copied:** recovery parsing, cursor-offset/node-chain context recognition, visible symbols through scopes, mapping/object member candidates, auto-import edits are proven. Deep-copies snapshots, re-parses per request, compiles synchronously — those behaviors violate the snapshot model. `docs/raw/ls-backlog/research/13-completion-migration.md:What the Go PoC proves—and what must not be copied`
+
+## Ticket 22 — invocation and type-directed completion
+
+- **Status:** type=implement, status=claimed, blocked by=none. Blocked by 18+21 (both resolved). `docs/raw/ls-backlog/issues/22-migrate-invocation-and-type-directed-completion.md`
+- **No research or design output exists:** `research/22*` and `design/22*` don't exist. `docs/raw/ls-backlog/issues/22-migrate-invocation-and-type-directed-completion.md`
+- **Java oracle contexts:** expression_context, variable-declaration, function_def, typedesc_context, action_node_context — covering nested calls, malformed argument lists, named arguments, expected record/object types, prefix ordering. `docs/raw/ls-backlog/issues/22-migrate-invocation-and-type-directed-completion.md:Java oracle`
+- **Expected-type projections already implemented (ticket 21):** resolver-captured, compiler-ranked immutable expected-type facts for assignment, return, condition, panic, check, positional/named arguments, mapping fields, list members, `new` args. Published through non-blocking exact-generation completion lease. `docs/raw/decisions/2026-07-16-expected-type-completion-projections.md:Decision`
+- **ExpectedTypeIndex already exists in code:** `ls/projects/expected_type_index.go` — `ExpectedSlotKind` (Assignment, Return, Condition, Panic, Check, Argument, NamedArgument, MappingField, ListMember, NewArg), `ExpectedTypeFact` with Kind/Known/TypeLabel/byte-span/ArgIndex/Compatible labels, `FactAt()` innermost-span lookup. `ls/projects/expected_type_index.go:1-80`
+- **Compatible candidates are only module variables/constants:** types and functions are excluded from assignability precomputation. `ls/projects/expected_type_index.go:225-280`
+- **MemberCompletionIndex already exists in code:** `ls/projects/member_completion_index.go` — `MemberAccessKind` (Field, OptionalField, Remote), `MemberCandidate` with Label/Kind/Detail/InsertText/Snippet/Rank, `MemberAccessSlot` with Kind/DotOffset/Receiver/Member byte ranges. `ls/projects/member_completion_index.go:1-80`
+- **Ticket 22 must reuse the existing non-blocking exact-generation lease pattern:** current syntax classifies the slot and replacement span; only an exact-generation copied projection supplies semantic candidates; prefix filtering, de-duplication, stable ranking, explicit UTF-16 edits, and snippet fallback happen once in `ls/core/query`/`ls/server`. `research/19-migrate-member-access-and-action-completion.md:Implications for later completion tickets`
+- **Ticket 22 must not revive PoC request-time parsing/type resolution or Java-provider architecture.** `research/19-migrate-member-access-and-action-completion.md:Implications for later completion tickets`
+- **Invocation argument/named-argument/expected-type ranking explicitly belongs to ticket 22** (not 19). `design/19-migrate-member-access-and-action-completion.md:Not included`
+- **Signature help transport and its request-acquisition policy remain deferred** (not part of ticket 22). `docs/raw/decisions/2026-07-16-expected-type-completion-projections.md:Consequences for implementation §6`
+- **22 extends the vertical-slice pattern:** non-blocking, exact-generation, recovery-aware syntax classification, core-private DTOs, server-only UTF-16/LSP adaptation. `docs/raw/decisions/2026-07-16-completion-vertical-slice.md:Decision`
+- **Java oracle for invocation completion:** function/method/client-resource calls, named arguments, check, trap, typeof, casts/tests, list/mapping/object/error constructors, conditional/basic literals. `research/13-completion-migration.md:Java provider migration ledger §Expressions/calls`
+- **Named arguments and assignment ranking wait for expected type** (ticket 22 territory). `research/13-completion-migration.md:Java provider migration ledger §Expressions/calls`
+- **HIL-selected initial coverage for expected-type projections:** typed assignment/initialization, returns, positional/named arguments, mapping/list fields, `new`/initializer arguments, conditions, and `panic`/`check`. `docs/raw/decisions/2026-07-16-expected-type-completion-projections.md:Decision`
+
+## Ticket 20 / 21 — expected-type completion projections
+
+- **Ticket 20 working direction preserves PoC semantic model but bans request-time compilation:** production design must capture transient resolver `expectedType` at contextual expression slots during background compilation, build private immutable projections keyed by byte ranges, and serve from exact-generation stable-snapshot leases — never parse, type-resolve, or wait for compilation on request threads. `docs/raw/ls-backlog/issues/20-design-expected-type-completion-projections.md:Working direction`
+- **Ticket 21 is an implement ticket (not design), blocked by 20:** asks how `ls/core/compile` and `ls/core/query` implement the approved projection with no compiler-object leakage, correct generation matching/cancellation, and corpus-visible recovery/unknown semantics. No decision doc exists yet. `docs/raw/ls-backlog/issues/21-implement-expected-type-completion-projections.md`
+- **Ticket 20 has no research or design output yet:** type=grilling, status=claimed, blocked by none (ticket 12 is resolved). `docs/raw/ls-backlog/issues/20-design-expected-type-completion-projections.md`
+- **Ticket 20 is NOT the next completion-track ticket after the vertical slice (14):** the charted order is 17→18→19→20/21→22→23→24/25. Tickets 17 (module/import/declaration) and 15 (semantic hover) are the actual frontier (open, unblocked, unclaimed).

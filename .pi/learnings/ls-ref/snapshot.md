@@ -1,0 +1,25 @@
+# Snapshot management
+
+- `lsp/snapshot.go:SnapshotManager` — `Current()`/`Publish()`/`IsCurrent()`; build snapshots reuse compiler env when possible
+- `lsp/snapshot.go:reuseModuleState` — carries forward CompilationUnits, Stage, Imports, Package, CFG across snapshot generations
+- `lsp/snapshot.go:newSingleFileSnapshot` — single default module
+- `lsp/snapshot.go:scanBuildProject` — walks `modules/` dir, creates per-module entries with `PackageID`
+- `lsp/snapshot.go:nextSnapshotID` — wraps to `initialSnapshotID` after `maxIncrementalSnapshotID` (100000)
+- `lsp/snapshot.go:newBuildSnapshot` — when `id == initialSnapshotID`, creates fresh `CompilerEnvironment`
+- `lsp/snapshot.go:openSnapshotFiles` — carries forward only `file.Open == true` files
+- `lsp/snapshot.go:scanModuleFiles` — reads `.bal` files from disk, overlays open files
+- `lsp/snapshot.go:readPackageDescriptor` — parses `Ballerina.toml` for org/name/version
+- `lsp/snapshot.go:uriFromPath` — `file:` scheme
+- `lsp/snapshot.go:normalizePath` — `filepath.Abs` + `filepath.Clean`
+- `lsp/server.go:pathFromURI` — URL-decoded file path
+- `lsp/server.go:isUnder` — normalized prefix check with separator
+- `lsp/server.go:invalidateChangedDependents` — resets module state for changed module + all transitive dependents in topo order
+- `lsp/server.go:updateSnapshot` — ignores documents not matching `singleFileURI`
+- `lsp/server.go:singleFileMode` — single-file mode handling
+- `lsp/server.go:projectMode` — project mode handling
+- `lsp/snapshot_test.go:writeBuildProjectFiles` — writes Ballerina.toml + main.bal
+- `lsp/snapshot_test.go:TestDidSaveDoesNotCreateSnapshotWhenContentUnchanged`
+- `lsp/snapshot_test.go:TestBuildSnapshotCanRefreshOpenFileContent`
+- `lsp/snapshot_test.go:TestBuildSnapshotResetsGenerationAndCompilerEnvironment`
+- `lsp/snapshot_test.go:TestProjectModeUsesInitializedRootAsSnapshotKey`
+- `lsp/snapshot_test.go:TestSingleFileModeMaintainsOneSnapshot`

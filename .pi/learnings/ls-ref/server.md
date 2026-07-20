@@ -1,0 +1,42 @@
+# Server dispatch and protocol handling
+
+- `lsp/server.go:dispatchRequest` — method switch, returns `(any, errorCode, errorMessage)`
+- `lsp/server.go:handleNotification` — method switch for all LSP notifications
+- `lsp/server.go:readMessage` — Content-Length header parsing
+- `lsp/server.go:writeMessage` — Content-Length framing
+- `lsp/server.go:queuedMessage` — either `payload` (JSON-RPC) or `diagnostic` (diagnosticJob)
+- `lsp/server.go:subscribeDiagnostics` — subscribes to CE-E5a/CE-E5b (BEST_EFFORT), reads stable snapshot via `compile.DiagnosticsFor`, converts to protocol, writes per open document
+- `lsp/server.go:publishRootDiagnostics` — checks `projects.Generation(root) == gen` before publishing; first-wins per generation
+- `lsp/server.go:subscribeEvictions` — clears `lastPublished[root]` on ProjectEvicted so reload's gen-1 diagnostics are not suppressed
+- `lsp/server.go:handleWatchedFileChanges` — routes to `refreshChangedBuildFile` (changed .bal), `rebuildBuildProject` (create/delete .bal, toml changes), `scheduleOpenFileDiagnostics` (open buffers)
+- `lsp/server.go:scheduleOpenFileDiagnostics` — skips rebuild for open files
+- `lsp/server.go:refreshChangedBuildFile` — checks open status first
+- `lsp/server.go:handleRenamedFiles`/`handleCreatedFiles`/`handleDeletedFiles` — rebuild project snapshot
+- `lsp/server.go:handleCancelRequest` — `$/cancelRequest` applies to all active roots (no per-document id→root mapping)
+- `lsp/server.go:capabilities.PublishDiagnostics.VersionSupport` — checked at initialize time
+- `lsp/log.go:logLS` — writes to `.bal/lsp.log` in project root, gated by `BAL_LSP_LOG` env var
+- `lsp/protocol/types.go` — LSP 3.18 types: CompletionParams, CompletionList, CompletionItem, Position, Range, TextEdit, etc.
+- `lsp/protocol/types.go:CompletionItemKindFunction=3, Variable=6, Class=7, Module=9, Keyword=14, Constant=21`
+- `lsp/protocol/types.go:InsertTextFormatPlainText=1, InsertTextFormatSnippet=2`
+- `lsp/protocol/types.go:CompletionOptions.TriggerCharacters` — `[":", ".", "{", "\n", " "]`
+- `lsp/protocol/types.go:ServerCapabilities` — CompletionProvider, DefinitionProvider, ReferenceProvider, CodeActionProvider, DocumentSymbolProvider, WorkspaceSymbolProvider
+- `lsp/protocol/types.go:TextDocumentSyncOptions.Change=1` — full content sync (not incremental)
+- `lsp/protocol/types.go:WatchKindCreate=1, Change=2, Delete=4`
+- `lsp/protocol/types.go:FileChangeTypeCreated=1, Changed=2, Deleted=3`
+- `lsp/protocol/types.go:WorkDoneProgressBegin/End` — `$/progress` notification payloads
+- `lsp/protocol/types.go:RegistrationParams` — dynamic capability registration
+- `lsp/protocol/types.go:FileSystemWatcher` — `GlobPattern` + `WatchKind`
+- `lsp/protocol/types.go:CodeAction` — Title, Kind, Diagnostics, Edit (WorkspaceEdit)
+- `lsp/protocol/types.go:WorkspaceEdit.Changes` — `map[DocumentURI][]TextEdit`
+- `lsp/protocol/types.go:ReferenceContext.IncludeDeclaration`
+- `lsp/protocol/types.go:CodeActionContext.Diagnostics`
+- `lsp/protocol/types.go:PublishDiagnosticsParams` — URI, Version (optional), Diagnostics
+- `lsp/protocol/types.go:Diagnostic` — Range, Severity, Code, Source, Message
+- `lsp/protocol/types.go:SymbolKind` — File=1 through TypeParameter=26
+- `lsp/protocol/types.go:DocumentSymbol` — Name, Kind, Range, SelectionRange, Children
+- `lsp/protocol/types.go:SymbolInformation` — Name, Kind, Location
+- `lsp/protocol/types.go:CompletionItem` — Label, Kind, Detail, InsertText, InsertTextFormat, AdditionalTextEdits
+- `lsp/protocol/types.go:CompletionList` — IsIncomplete, Items
+- `lsp/protocol/types.go:TextEdit` — Range, NewText
+- `lsp/protocol/types.go:Location` — URI, Range
+- `lsp/protocol/types.go:Range/Position` — Range (Start, End); Position (Line, Character)

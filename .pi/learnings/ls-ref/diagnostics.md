@@ -1,0 +1,21 @@
+# Diagnostics pipeline
+
+- `lsp/diagnostics.go:runDiagnostics` — full compile pipeline per snapshot, debounced via `scheduleDiagnostics` with stale-job guard
+- `lsp/diagnostics.go:runModuleFrontend` — 7 stages: Parse → SymbolResolve → TopLevelTypeResolve → LocalTypeResolve → SemanticAnalyze → CFGBuilt → CFGAnalyzed
+- `lsp/diagnostics.go:runLocalPackagePipelines` — goroutine per module for stages 5-7
+- `lsp/diagnostics.go:runChangedModuleDiagnostics` — runs only changed module through full pipeline, dependencies through TopLevelTypeResolve
+- `lsp/diagnostics.go:parseModuleImportCompilationUnits` — uses `parser.GetImportSyntaxTree` for faster import-only parsing
+- `lsp/diagnostics.go:parseModuleCompilationUnits` — skips re-parse if `module.CompilationUnits[uri]` exists
+- `lsp/diagnostics.go:topologicalModuleOrder` — Kahn's algorithm, cycle detection
+- `lsp/diagnostics.go:lspPositionMapper` — precomputes line starts, batch-converts byte offsets to UTF-16 positions
+- `lsp/diagnostics.go:lspPositionMapper.Positions` — sorts offsets, walks content once for all positions
+- `lsp/diagnostics.go:lspSeverity` — maps Warning→2, Info→3, Hint→4, default→1
+- `lsp/diagnostics.go:diagnosticSource = "ballerina-go"`
+- `lsp/diagnostics.go:lspPositionMapper.Position` — surrogates (>=0x10000) count as 2 UTF-16 code units
+- `lsp/diagnostics.go:convertDiagnostics` — maps `compile.CompilerDiagnostic` (byte-offset positions) to `protocol.Diagnostic` (UTF-16 positions)
+- `lsp/server.go:scheduleDiagnostics` — goroutine with `time.Sleep(delay)` before enqueueing
+- `lsp/server.go:handleDiagnosticJob` — checks `job.seq == latestSeq && job.updateSeq == latestUpdateSeq` before publishing
+- `lsp/server.go:publishDiagnostics` — checks `updateSeq == s.updateSequence.Load()` and `manager.IsCurrent(snapshot)` before publishing
+- `lsp/server.go:updateSequence` — atomic int64 incremented on every didOpen/didChange/didClose/didSave/didChangeWatchedFiles
+- `lsp/server.go:diagnosticSequence` — atomic int64 for debounced diagnostic job ordering
+- `lsp/server.go:beginIndexingProgress`/`endIndexingProgress` — `window/workDoneProgress/create` + `$/progress` notifications

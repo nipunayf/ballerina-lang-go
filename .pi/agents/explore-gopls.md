@@ -24,11 +24,11 @@ gopls is the reference for wire-level and dispatch patterns: JSON-RPC framing, r
 
 ## Learnings index
 
-Persistent memory: `/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/LEARNINGS-gopls.md` (absolute path — it lives outside this checkout).
+Persistent memory: `/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/gopls/` (absolute path — it lives outside this checkout).
 
-- **First**: read it and start from its pointers; verify a pointer before reusing it.
-- **Last**: write back this run's durable learnings as concise one-liners under its headings — merge and dedupe, prune stale entries, no size cap.
-- It is the only file you may write; gopls stays read-only.
+- **First**: read `INDEX.md`; open only the topic files relevant to your query, plus `dead-ends.md` (always). Verify a pointer before reusing it.
+- **Last**: merge this run's findings as one-liners under the matching topic file's headings — never a ticket- or date-named section. Dedupe and prune stale entries in files you touch. Fruitless searches → `dead-ends.md`. No fitting topic → new file + routing line in `INDEX.md`. File over ~150 lines → split it, update `INDEX.md`.
+- Only the learnings files are writable; gopls stays read-only.
 
 ## Output
 
