@@ -17,5 +17,13 @@
 - **`View.shutdown()`** (view.go:495-513): calls `v.snapshot.cancel()` and `v.snapshot.decref()`, sets `v.snapshot = nil`.
 - **`Session.Shutdown`** (session.go:89-98): shuts down all views, stops parse cache, then `snapshotWG.Wait()` — waits for all snapshot refs to release.
 
+## didChange → snapshot invalidation flow (lazy)
+- **DidModifyFiles entry** (session.go:784): called by `text_synchronization.go` DidChange handler.
+- **Invalidation is synchronous, not eager full-file recompile**: `Session.DidModifyFiles` → `updateOverlays` (writes new content to overlayFS) → `invalidateViewLocked` (view.go:783-815).
+- **`invalidateViewLocked` (line 799)**: calls `prevSnapshot.cancel()` to cancel all in-flight work on stale snapshot, then clones new snapshot with updated file handles.
+- **Snapshot clone behavior** (snapshot.go:1512): clones package cache (`s.packages.Clone()` at 1536) but replaces file handles for changed URIs (`s.files.clone(changedFiles)` at 1539). Parse cache entries keyed by file hash miss on changed content.
+- **Completion requests during/after didChange**: acquire current snapshot immediately (cheap), then call `TypeCheck` which uses futureCache to join in-flight work on the new snapshot. Old snapshot's in-flight work was already cancelled.
+
 ## Transferable patterns
 - **Snapshot ref-counting**: `Acquire()`/`decref()` pattern with deferred release is simple and prevents use-after-free.
+- **Lazy snapshot invalidation**: don't recompute eagerly on didChange; instead cancel old snapshot + clone with new file content. Queries recompute via memoize on first request.

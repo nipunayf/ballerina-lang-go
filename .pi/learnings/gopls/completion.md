@@ -1,7 +1,8 @@
 # gopls completion patterns
 
 ## CompletionItem internal struct
-- `internal/golang/completion/completion.go:99-102` — `CompletionItem` struct: `Label`, `Detail`, `InsertText`, `Kind`, `Tags`, `Deprecated`, `AdditionalTextEdits`, `Depth`, `Score`, `snippet *snippet.Builder`, `Documentation`, `isSlice`. Invariant: does not refer to syntax or types.
+- `internal/golang/completion/completion.go:50-105` — `CompletionItem` struct: `Label`, `Detail`, `InsertText`, `Kind`, `Tags`, `Deprecated`, `AdditionalTextEdits`, `Depth`, `Score`, `snippet *snippet.Builder`, `Documentation`, `isSlice`. Invariant: does not refer to syntax or types.
+- `internal/golang/completion/completion.go:68` — `Kind protocol.CompletionItemKind` — the internal struct uses the **protocol type directly**, not a local enum. No mapping layer exists.
 - `internal/golang/completion/completion.go:130-133` — `Snippet()` method: returns `snippet.String()` if non-nil, else `InsertText`.
 - `internal/golang/completion/completion.go:140-175` — `addConversion` wraps item in conversion expression: edits `InsertText` and `snippet`, adds `AdditionalTextEdits` for prefix before selector.
 - `internal/golang/completion/completion.go:180-185` — Scoring constants: `lowScore=0.01`, `stdScore=1.0`, `highScore=10.0`.
@@ -90,10 +91,25 @@
 
 ## toProtocolCompletionItems conversion
 - `internal/server/completion.go:80-200` — `toProtocolCompletionItems` converts internal `CompletionItem` to `protocol.CompletionItem`. Key steps: (1) filters deep completions beyond `MaxDeepCompletions` if not `DeepCompletion`, (2) selects `InsertText` vs `Snippet()` based on `InsertTextFormat`, (3) skips items with empty `insertText` (snippets disabled but candidate only supports snippet), (4) builds `Documentation` as Markdown or plain text, (5) builds `InsertReplaceEdit` or `TextEdit` based on `InsertReplaceSupported`, (6) sets `SortText: fmt.Sprintf("%05d", i)` as positional hack, (7) sets `FilterText: strings.TrimLeft(candidate.InsertText, "&*")`, (8) sets `Preselect: i == 0`.
+- `internal/server/completion.go:191` — `Kind: candidate.Kind` — **direct passthrough**, no mapping. The internal `CompletionItem.Kind` (already `protocol.CompletionItemKind`) is copied verbatim to the protocol `CompletionItem.Kind`.
 - `internal/server/completion.go:163-180` — Insert vs Replace: if `InsertReplaceSupported`, uses `InsertReplaceEdit` with separate `Insert` (up to cursor) and `Replace` (full surrounding) ranges. Otherwise falls back to `TextEdit` with `replaceRng`.
 - `internal/server/completion.go:195-196` — `SortText: fmt.Sprintf("%05d", i)` — positional index as sort text, a hack for clients that don't respect server score ordering (LSP issue #348).
 - `internal/server/completion.go:70-73` — Empty results (nil candidates) return `IsIncomplete: true` with empty items slice — signals client to keep requesting.
 - `internal/server/completion.go:79` — `incompleteResults` set to `true` when `DeepCompletion` or `Matcher == Fuzzy`.
+
+## CompletionItemKind: no local enum, direct protocol type
+- gopls has **no local/internal CompletionItemKind enum**. The internal `CompletionItem` struct (`internal/golang/completion/completion.go:68`) uses `protocol.CompletionItemKind` directly.
+- `internal/protocol/tsprotocol.go:1184` — `type CompletionItemKind uint32` — the protocol type definition.
+- `internal/protocol/tsprotocol.go:6554-6575` — All 25 LSP constants (`TextCompletion=1` through `TypeParameterCompletion=25`).
+- `internal/protocol/enums.go:24,60-84,161-162` — `namesCompletionItemKind` array and `Format()` method for string rendering.
+- Kind is set directly to protocol constants at every creation site:
+  - `internal/golang/completion/format.go:338-356` — `formatBuiltin()`: `protocol.ConstantCompletion`, `protocol.FunctionCompletion`, `protocol.InterfaceCompletion`, `protocol.ClassCompletion`, `protocol.VariableCompletion`.
+  - `internal/golang/completion/format.go:100-130` — `item()` (main lexical path): `protocol.TextCompletion` (default), `protocol.ConstantCompletion`, `protocol.VariableCompletion`, `protocol.FieldCompletion`, `protocol.FunctionCompletion`, `protocol.MethodCompletion`, `protocol.ModuleCompletion`.
+  - `internal/golang/completion/completion.go:1447-1454` — unimported selector path: `protocol.FunctionCompletion`, `protocol.VariableCompletion`, `protocol.ConstantCompletion`, `protocol.ClassCompletion`.
+  - `internal/golang/completion/unimported.go:224-272` — unimported package symbols: `protocol.FunctionCompletion`, `protocol.VariableCompletion`, `protocol.ConstantCompletion`.
+  - `internal/golang/completion/unimported.go:318` — module-indexed candidates: `protocol.FunctionCompletion`, `protocol.VariableCompletion`, `protocol.ConstantCompletion`.
+  - `internal/golang/types_format.go:28-40` — `FormatType()`: `protocol.InterfaceCompletion`, `protocol.StructCompletion`, `protocol.ClassCompletion`.
+- `internal/server/completion.go:191` — `toProtocolCompletionItems` passes `candidate.Kind` through verbatim — no mapping, no conversion.
 
 ## CompletionOptions settings
 - `internal/settings/settings.go:369-395` — `CompletionOptions` struct: `UsePlaceholders bool`, `CompletionBudget time.Duration` (soft latency goal, 0=unlimited), `Matcher Matcher` (Fuzzy/CaseInsensitive/CaseSensitive), `ExperimentalPostfixCompletions bool`, `CompleteFunctionCalls bool`.

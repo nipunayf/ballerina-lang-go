@@ -1,9 +1,9 @@
 # gopls hazards and stale-offset prevention
 
-## Hazards for this LS
-- **No off-the-shelf jsonrpc2 library**: gopls uses its own `internal/jsonrpc2` and `internal/jsonrpc2_v2`. This LS must implement its own `CancelHandler` equivalent.
-- **Snapshot invalidation cancels ALL in-flight work**: `prevSnapshot.cancel()` (view.go:797) is aggressive — it cancels every request using the old snapshot. This is correct for gopls because requests re-acquire the new snapshot, but could cause unnecessary work if the LS has long-running operations that could continue on stale data.
-- **No per-request snapshot isolation**: gopls doesn't pin a snapshot per request — handlers acquire the current snapshot at call time. If the snapshot is invalidated mid-request, the handler's context gets cancelled. This is fine for gopls's short-lived requests but could be problematic for long-running operations.
+## Hazards in gopls's own design
+- **No off-the-shelf jsonrpc2 library**: gopls uses its own `internal/jsonrpc2` and `internal/jsonrpc2_v2` rather than a third-party implementation.
+- **Snapshot invalidation cancels ALL in-flight work**: `prevSnapshot.cancel()` (view.go:797) is aggressive — it cancels every request using the old snapshot. This is correct for gopls because requests re-acquire the new snapshot, but is aggressive behavior worth noting.
+- **No per-request snapshot isolation**: gopls doesn't pin a snapshot per request — handlers acquire the current snapshot at call time. If the snapshot is invalidated mid-request, the handler's context gets cancelled.
 - **`futureCache` requires retryable compute functions**: the contract says compute must be safely retryable and always return the same value. This is hard to guarantee in general.
 - **`$/cancelRequest` is a notification, not a request**: it has no response. The handler must not reply with an error — it just calls `canceller(id)` and replies `nil, nil`.
 
@@ -22,4 +22,4 @@
 - **Overlay-first reads**: `overlayFS.ReadFile` (fs_overlay.go:43) returns the overlay (editor buffer) if present, before falling back to disk. The snapshot's `lockedSnapshot.ReadFile` (snapshot.go:1116) checks the snapshot's `files` map first, then falls back to `view.fs.ReadFile` (which goes through overlayFS).
 - **Snapshot cancellation**: `invalidateViewLocked` (view.go:797) calls `prevSnapshot.cancel()` to cancel all in-flight work on stale data. In-flight completions get `RequestCancelledError` via `replyWithDetachedContext` (protocol.go:226).
 - **Completion reads file from snapshot**: `server/completion.go:28` calls `s.session.FileOf` → gets current snapshot + file handle. Then `NarrowestPackageForFile` (golang/snapshot.go:35) calls `snapshot.TypeCheck` which uses the snapshot's file handles. The returned `pgf.Mapper` (parsego/file.go:22) is built from `Src` at parse time, which matches the snapshot's file content.
-- **Applicability for Go Ballerina LS**: The pattern is clean and transferable. Key elements to replicate: (1) overlayFS that shadows disk with editor buffers, (2) snapshot-per-view with ref-counted lifecycle, (3) snapshot clone that replaces file handles for changed URIs, (4) parse cache keyed by file hash. The aggressive `prevSnapshot.cancel()` may be overkill for a Ballerina LS if type-checking is expensive — consider per-request context cancellation instead of snapshot-level cancellation.
+- **Pattern summary**: overlayFS that shadows disk with editor buffers, snapshot-per-view with ref-counted lifecycle, snapshot clone that replaces file handles for changed URIs, parse cache keyed by file hash. `prevSnapshot.cancel()` cancels all in-flight work aggressively on every invalidation rather than isolating per-request.
