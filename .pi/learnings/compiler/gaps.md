@@ -19,8 +19,8 @@ is closed upstream.
 
 - **No `NodeAtPosition(pos)` query** — no API maps byte offset → node in any package; must walk the red-node tree or AST manually.
 - **No syntax-tree-to-AST-node mapping** — red nodes and BLang nodes are separate trees; no API maps between them.
-- **No `ExpectedType` concept** — zero grep hits for `ExpectedType`/`expectedType`/`expected_type` across `ls-ref/`; "what type is expected at position X" must be built from scratch.
-- **Expected type is transient, not stored** — `expectedType` is a local parameter threaded through `resolveActionOrExpression`; `setExpectedType` (alias for `SetDeterminedType`) stores the *resolved* type, not the *expected* type. After compilation, expected type must be re-derived from the enclosing context. `semantics/type_resolver.go:3187`, `semantics/semantic_analyzer.go:2113`.
+- **Resolved (this gap is closed) — `ExpectedType` concept now exists**: `context.ExpectedSlotRecord`/`ExpectedSlotKind` (capture during resolution) and `projects.ExpectedTypeIndex`/`ExpectedTypeFact` (post-compilation projection) were added for ticket 20. See `completion-infrastructure.md`.
+- **Expected type is still transient inside the resolver itself** — `expectedType` is a local parameter threaded through `resolveActionOrExpression`; `setExpectedType` (alias for `SetDeterminedType`) stores the *resolved* type, not the *expected* type, on the AST node. The `ExpectedSlotRecord` capture is what makes the transient value durable for LS consumption — see `completion-infrastructure.md`. `semantics/type_resolver.go:3187`, `semantics/semantic_analyzer.go:2113`.
 - **No `TypeDescriptor`-to-position mapping** — type descriptors attach to AST nodes; no query for "what type descriptor covers position X".
 
 ## Compilation granularity & lifecycle
