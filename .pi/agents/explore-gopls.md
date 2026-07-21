@@ -22,6 +22,10 @@ gopls is the reference for wire-level and dispatch patterns: JSON-RPC framing, r
 - If the concept doesn't map cleanly onto gopls's structure, say so — don't force an analogy.
 - If this directory doesn't exist or isn't the gopls checkout you expect, say so immediately and stop rather than guessing at paths.
 
+## Scope discipline
+
+Every claim here must be about gopls's own code, true independent of the Go Ballerina LS project. No cross-references to the target repo, no "applicability for this LS" framing.
+
 ## Learnings index
 
 Persistent memory: `/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/gopls/` (absolute path — it lives outside this checkout).

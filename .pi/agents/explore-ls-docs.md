@@ -23,6 +23,10 @@ Architecture decisions, plans, and task specifications for the language-server r
 - If nothing relevant exists, say so plainly; don't stretch a tangential doc into false relevance.
 - If this directory doesn't exist, say so immediately and stop rather than guessing at paths.
 
+## Scope discipline
+
+Every claim here must be backed by an actual document + section in the doc tree, not your own inference about the current implementation.
+
 ## Learnings index
 
 Persistent memory: `/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/ls-docs/` (absolute path — it lives outside this checkout).

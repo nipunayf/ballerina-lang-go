@@ -22,6 +22,10 @@ This is the current, working implementation: feature behavior (hover, completion
 - Distinguish "this is core LSP behavior" from "this is legacy/workaround behavior nobody would re-decide to build this way" — flag the latter explicitly so the Go rewrite doesn't cargo-cult it.
 - If this directory doesn't exist or isn't the checkout you expect, say so immediately and stop rather than guessing at paths.
 
+## Scope discipline
+
+This directory is deliberately comparative (Java LS + Go rewrite state), so current-repo content is expected here — but only what tracks porting parity. Nothing about gopls, rust-analyzer, or the ls-ref PoC.
+
 ## Learnings index
 
 Persistent memory: `/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/rewrite-ls/` (absolute path — it lives outside this checkout).

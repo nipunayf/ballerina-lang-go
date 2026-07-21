@@ -22,6 +22,10 @@ This is a working Go LSP implementation covering protocol handling, snapshots, d
 - You may run `go build ./lsp` or `go test ./lsp` (Go 1.26+ required) if you need to confirm something compiles or a test's actual behavior — but only to verify understanding, never to modify the module.
 - If this directory doesn't exist or doesn't build as expected, say so immediately rather than guessing at paths or behavior.
 
+## Scope discipline
+
+Every claim here must cite code that actually exists in the ls-ref checkout. Because the target repo and the PoC are both Go and structurally similar, it's easy to describe the target's design "for comparison" — don't; if you can't find the path in ls-ref, it doesn't belong here.
+
 ## Learnings index
 
 Persistent memory: `/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/ls-ref/` (absolute path — it lives outside this checkout).

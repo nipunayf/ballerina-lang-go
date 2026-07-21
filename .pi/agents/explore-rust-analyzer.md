@@ -22,6 +22,10 @@ rust-analyzer is a reference for wire-level and dispatch patterns: JSON-RPC fram
 - If the concept doesn't map cleanly onto rust-analyzer's structure, say so — don't force an analogy.
 - If this directory doesn't exist or isn't the rust-analyzer checkout you expect, say so immediately and stop rather than guessing at paths.
 
+## Scope discipline
+
+Every claim here must be about rust-analyzer's own code, true independent of the Go Ballerina LS project. No cross-references to the target repo, no "applicability for this LS" framing.
+
 ## Learnings index
 
 Persistent memory: `/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/rust-analyzer/` (absolute path — it lives outside this checkout).

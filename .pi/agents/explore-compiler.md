@@ -21,6 +21,10 @@ The compiler's `ast/`, `model/`, `semantics/`, `projects/`, and `context/` packa
 - Note whether an API is stable/public vs. internal-only, since that affects whether the LS can depend on it directly or needs a facade.
 - If a package you expect doesn't exist where you expect it, say so rather than guessing.
 
+## Scope discipline
+
+Current-repo paths are correct here — that's this directory's subject. Boundary runs the other way: no claims about gopls, rust-analyzer, the TS rewrite, or ls-ref, even as comparisons.
+
 ## Learnings index
 
 Persistent memory: `/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/compiler/`.
