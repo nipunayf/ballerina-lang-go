@@ -1,27 +1,40 @@
 # Layout
 
-- `ls/ls/` — the PoC itself: `server/`, `core/`, `protocol/`, `corpus/`
-- `ls/ls/server/` — protocol-aware handlers, UTF-16 conversion, diagnostic publication
-- `ls/ls/core/` — protocol-free core: `compile/`, `workspace/`, `event/`, `uri/`
-- `ls/ls/protocol/` — LSP 3.18 JSON-RPC envelope, framing, generated types
-- `ls/ls/corpus/` — golden-JSON transcript tests
-- `ls/ls/core/query/` — semantic query service (protocol-free, syntax-tree walk)
-- `ls/ls/core/compile/snapshot.go` — StableSnapshot/InProgressSnapshot/SnapshotStore (dual-snapshot engine)
+The PoC (`ballerina-lang-go/ls-ref`) has no `ls/` subtree — the LSP layer is a
+single flat package at repo root:
+
+- `lsp/` — the entire LSP layer: `server.go`, `snapshot.go`, `diagnostics.go`,
+  `completion.go`, `definition.go`, `references.go`, `code_action.go`,
+  `symbols.go`, `log.go`, plus one `_test.go` per handler file. No further
+  package split (no separate protocol-free "core" package, no query/workspace/
+  event/uri sub-packages) — protocol types and business logic live together in
+  `lsp/*.go`.
+- `lsp/protocol/` — hand-written LSP 3.18 types (`types.go`): JSON-RPC message
+  envelope, generated-looking request/response/notification structs.
+- `lsp/corpus/symbols/project/` — Ballerina source fixtures (`main.bal`,
+  `Ballerina.toml`, `modules/helpers/helpers.bal`) used by `symbols_test.go`;
+  not a golden-JSON transcript harness.
+- Everything else (`ast/`, `bir/`, `parser/`, `semantics/`, `semtypes/`,
+  `projects/`, `model/`, `context/`, `runtime/`, `values/`, `tools/`, `cli/`,
+  `common/`) is the compiler/runtime this PoC's `lsp/` package sits on top of —
+  same shape as the compiler this repo shares, not part of the LSP surface
+  itself.
 
 ## Key entry points
 
-- `ls/ls/server/server.go` — Server struct, message dispatch, didOpen/didChange/didClose/didSave/didChangeWatchedFiles handlers
-- `ls/ls/server/diagnostics.go` — convertDiagnostics (byte-offset → UTF-16 protocol.Diagnostic)
-- `ls/ls/server/documents.go` — applyChanges (UTF-16 range → byte-offset full text)
-- `ls/ls/core/compile/compile.go` — CompilationService.Compile (synchronous, context-ignoring)
-- `ls/ls/core/workspace/workspace.go` — ProjectService (documents map, palFS overlay, project index, publish/reload)
-- `ls/ls/core/workspace/index.go` — projectIndex (LRU cache, source-root memo, eviction)
-- `ls/ls/core/workspace/palfs.go` — palFS (overlay-augmented io/fs.FS for open-buffer content)
-- `ls/ls/core/event/event.go` — synchronous event bus (ProjectRegistered/Evicted/KindTransitioned)
-- `ls/ls/core/uri/uri.go` — DocumentURI (file:/expr:/ai:/bala: scheme-typed identity)
-- `ls/ls/protocol/framing.go` — ReadMessage/WriteMessage (Content-Length framing)
-- `ls/ls/corpus/corpus_test.go` — transcript driver with $pal/writeFile interleaving
-- `ls/ls/core/query/query.go` — query.Service (DocumentSymbols via syntax-tree walk)
-- `ls/ls/server/symbols.go` — handleDocumentSymbol (protocol conversion, hierarchy/flat dispatch)
-- `ls/ls/core/compile/snapshot.go` — SnapshotStore (bounded LRU, stale gate, in-progress tracking)
-- `ls/ls/core/event/event.go` — tiered event bus (CRITICAL/COALESCEABLE/BEST_EFFORT)
+- `lsp/server.go` — `Server` struct, `dispatchRequest`/`handleNotification`
+  method switches, didOpen/didChange/didClose/didSave/didChangeWatchedFiles
+  handlers, message framing (`readMessage`/`writeMessage`)
+- `lsp/diagnostics.go` — `runDiagnostics`/`runModuleFrontend`,
+  `convertDiagnostics` (byte-offset → UTF-16 `protocol.Diagnostic`)
+- `lsp/snapshot.go` — `SnapshotManager`, `Snapshot` (plain struct, no
+  refcounting), single-file vs build-project snapshot construction
+- `lsp/completion.go` — `Server.completion()`, context classification,
+  routing to specialized completion paths
+- `lsp/definition.go` / `lsp/references.go` — `symbolAtPosition()` +
+  type-switch over AST node kinds
+- `lsp/code_action.go` — missing/unused-import quick-fixes
+- `lsp/symbols.go` — `documentSymbols`/`workspaceSymbols`
+- `lsp/log.go` — `logLS`, gated by `BAL_LSP_LOG` env var, writes to
+  `.bal/lsp.log`
+- `lsp/protocol/types.go` — all LSP wire types used by the PoC

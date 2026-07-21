@@ -1,6 +1,6 @@
 # Snapshot management
 
-- `lsp/snapshot.go:SnapshotManager` — `Current()`/`Publish()`/`IsCurrent()`; build snapshots reuse compiler env when possible
+- `lsp/snapshot.go:SnapshotManager` — `Current()`/`Publish()`/`IsCurrent()`; no locks, simple pointer swap (lines 104-126). Snapshots reused eagerly: updateSnapshot calls nextBuildSnapshot synchronously on every didChange (server.go:303-306), no separate background compile of snapshot metadata; diagnostics compile is background but post-hoc (not integrated with request handling)
 - `lsp/snapshot.go:reuseModuleState` — carries forward CompilationUnits, Stage, Imports, Package, CFG across snapshot generations
 - `lsp/snapshot.go:newSingleFileSnapshot` — single default module
 - `lsp/snapshot.go:scanBuildProject` — walks `modules/` dir, creates per-module entries with `PackageID`
@@ -15,8 +15,6 @@
 - `lsp/server.go:isUnder` — normalized prefix check with separator
 - `lsp/server.go:invalidateChangedDependents` — resets module state for changed module + all transitive dependents in topo order
 - `lsp/server.go:updateSnapshot` — ignores documents not matching `singleFileURI`
-- `lsp/server.go:singleFileMode` — single-file mode handling
-- `lsp/server.go:projectMode` — project mode handling
 - `lsp/snapshot_test.go:writeBuildProjectFiles` — writes Ballerina.toml + main.bal
 - `lsp/snapshot_test.go:TestDidSaveDoesNotCreateSnapshotWhenContentUnchanged`
 - `lsp/snapshot_test.go:TestBuildSnapshotCanRefreshOpenFileContent`

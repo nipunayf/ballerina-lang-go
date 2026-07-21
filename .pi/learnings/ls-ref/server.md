@@ -4,16 +4,11 @@
 - `lsp/server.go:handleNotification` — method switch for all LSP notifications
 - `lsp/server.go:readMessage` — Content-Length header parsing
 - `lsp/server.go:writeMessage` — Content-Length framing
-- `lsp/server.go:queuedMessage` — either `payload` (JSON-RPC) or `diagnostic` (diagnosticJob)
-- `lsp/server.go:subscribeDiagnostics` — subscribes to CE-E5a/CE-E5b (BEST_EFFORT), reads stable snapshot via `compile.DiagnosticsFor`, converts to protocol, writes per open document
-- `lsp/server.go:publishRootDiagnostics` — checks `projects.Generation(root) == gen` before publishing; first-wins per generation
-- `lsp/server.go:subscribeEvictions` — clears `lastPublished[root]` on ProjectEvicted so reload's gen-1 diagnostics are not suppressed
 - `lsp/server.go:handleWatchedFileChanges` — routes to `refreshChangedBuildFile` (changed .bal), `rebuildBuildProject` (create/delete .bal, toml changes), `scheduleOpenFileDiagnostics` (open buffers)
 - `lsp/server.go:scheduleOpenFileDiagnostics` — skips rebuild for open files
 - `lsp/server.go:refreshChangedBuildFile` — checks open status first
 - `lsp/server.go:handleRenamedFiles`/`handleCreatedFiles`/`handleDeletedFiles` — rebuild project snapshot
-- `lsp/server.go:handleCancelRequest` — `$/cancelRequest` applies to all active roots (no per-document id→root mapping)
-- `lsp/server.go:capabilities.PublishDiagnostics.VersionSupport` — checked at initialize time
+- No `$/cancelRequest` handling exists anywhere in the PoC — `dispatchRequest`'s method switch has no cancellation case
 - `lsp/log.go:logLS` — writes to `.bal/lsp.log` in project root, gated by `BAL_LSP_LOG` env var
 - `lsp/protocol/types.go` — LSP 3.18 types: CompletionParams, CompletionList, CompletionItem, Position, Range, TextEdit, etc.
 - `lsp/protocol/types.go:CompletionItemKindFunction=3, Variable=6, Class=7, Module=9, Keyword=14, Constant=21`
