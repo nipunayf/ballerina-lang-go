@@ -11,6 +11,7 @@ matching your query — plus `dead-ends.md`, always.
 - [java-ls-async-model.md](java-ls-async-model.md) — Java LS async compilation model (double debounce, per-project locks, ClonedWorkspace) and legacy/workaround behaviors NOT to cargo-cult. Read for: scheduling, debounce, cancellation design; always read before porting Java sync behavior.
 - [go-rewrite-state.md](go-rewrite-state.md) — Go rewrite current state: workspace/compile/event-bus entry points, resolution→compile division, diagnostic identity, event ordering, transferable invariants, Java-vs-Go mechanism mapping, choices still requiring HIL. Read for: what exists in `ballerina-lang-go/ls` today and what's still open.
 - [completion-tests.md](completion-tests.md) — Java LS completion test infrastructure: class hierarchy, fixture schema, assertion mechanism, fixture counts, skip lists, mocked packages. Read for: porting or replicating completion tests.
+- [completion-item-kinds.md](completion-item-kinds.md) — How completion item kinds are represented: Java LS uses LSP `CompletionItemKind` directly everywhere; Go rewrite uses a three-layer protocol-free vocabulary (`projects.CompletionFactKind` → `query.CompletionItemKind` → `protocol.CompletionItemKind`). Read for: ticket 31 target shape, kind mapping, behavioral divergences.
 - [dead-ends.md](dead-ends.md) — ALWAYS read (it's short).
 
 Maintenance: merge findings into the matching topic file under its existing

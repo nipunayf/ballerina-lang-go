@@ -38,6 +38,15 @@ Keep entries summarized and pointer-dense — `path` + symbol, one line each.
 - `projects.AliasExport` — `Alias`, `Facts []CompletionFact` — `ls/projects/import_catalog.go:44-50`
 - `projects.ImportCatalog` — `StdlibModules()`, `ProjectModules()`, `AliasExports(fileKey)` — built after compilation. `ls/projects/import_catalog.go:56-70`
 
+## CompletionItemKind ownership chain
+
+- **Compiler projections (`projects/`) own protocol-free kind enums** — `CompletionFactKind` (Function/ModuleVar/Constant/Type), `MemberCandidateKind` (Field/Method), `CallableKind` (Function/Method/Remote). None reference `protocol.CompletionItemKind`. `ls/projects/completion_index.go:28-35`, `ls/projects/member_completion_index.go:45-50`, `ls/projects/invocation_completion_index.go:45-50`
+- **Query layer (`ls/core/query/`) owns `query.CompletionItemKind`** — 7 values: Keyword, Variable, Constant, Function, Type, Module, Snippet. Comment at definition explicitly says "owned by the query layer. The server maps it to an LSP CompletionItemKind." `ls/ls/core/query/completion.go:45-55`
+- **Server (`ls/server/`) maps query kinds to LSP protocol kinds** — `toLSPCompletionItemKind()` at `ls/ls/server/completion.go:178-195`. Mapping: Keyword→14, Variable→6, Constant→21, Function→3, Type→22(Struct), Module→9, Snippet→15, default→1(Text).
+- **Mapping chain**: `projects.CompletionFactKind` → `query.CompletionItemKind` (via `semanticItem()` at `ls/ls/core/query/completion.go:383-400`); `projects.MemberCandidateKind` → `query.CompletionItemKind` (via `memberCandidateItem()` at `ls/ls/core/query/completion.go:505-520`); `query.CompletionItemKind` → `protocol.CompletionItemKind` (via `toLSPCompletionItemKind()` at `ls/ls/server/completion.go:178-195`).
+- **Compiler does NOT import `protocol.CompletionItemKind`** — zero grep hits in `ls/projects/`. Protocol-free by design.
+- **`ls/core/query` carrying `protocol.CompletionItemKind` would break protocol-free design** — would create a dependency from query layer to LSP protocol package, violating the separation of concerns. Current architecture is correct.
+
 ## LS-side: query layer (ls/core/query)
 
 - `query.CompletionLease` / `query.CompletionLeaser` — non-blocking, generation-matched lease. `ls/ls/core/query/completion.go:20-30`
