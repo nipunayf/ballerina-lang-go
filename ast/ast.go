@@ -83,8 +83,8 @@ type (
 		bLangNodeBase
 		Expr            BLangExpression
 		HasValue        bool
-		AnnotationName  *BLangIdentifier
-		PkgAlias        *BLangIdentifier
+		AnnotationName  IdentifierNode
+		PkgAlias        IdentifierNode
 		symbol          model.SymbolRef
 		AnnotationValue values.AnnotationValue
 	}
@@ -124,7 +124,6 @@ type (
 		OrgName      *BLangIdentifier
 		PkgNameComps []BLangIdentifier
 		Alias        *BLangIdentifier
-		CompUnit     *BLangIdentifier
 		Version      *BLangIdentifier
 	}
 
@@ -515,19 +514,19 @@ var (
 	_ BNodeWithSymbol = &BLangTypeDefinition{}
 )
 
-func (b *BLangAnnotationAttachment) GetPackageAlias() *BLangIdentifier {
+func (b *BLangAnnotationAttachment) GetPackageAlias() IdentifierNode {
 	return b.PkgAlias
 }
 
-func (b *BLangAnnotationAttachment) SetPackageAlias(pkgAlias *BLangIdentifier) {
+func (b *BLangAnnotationAttachment) SetPackageAlias(pkgAlias IdentifierNode) {
 	b.PkgAlias = pkgAlias
 }
 
-func (b *BLangAnnotationAttachment) GetAnnotationName() *BLangIdentifier {
+func (b *BLangAnnotationAttachment) GetAnnotationName() IdentifierNode {
 	return b.AnnotationName
 }
 
-func (b *BLangAnnotationAttachment) SetAnnotationName(name *BLangIdentifier) {
+func (b *BLangAnnotationAttachment) SetAnnotationName(name IdentifierNode) {
 	b.AnnotationName = name
 }
 
@@ -1541,6 +1540,13 @@ func createConstantNode() *BLangConstant {
 
 func GetCompilationUnit(cx *context.CompilerContext, syntaxTree *tree.SyntaxTree) *BLangCompilationUnit {
 	nodeBuilder := NewNodeBuilder(cx)
+	compilationUnit := nodeBuilder.TransformModulePart(syntaxTree.RootNode.(*tree.ModulePart))
+	return compilationUnit.(*BLangCompilationUnit)
+}
+
+// GetRecoveredCompilationUnit builds an AST while preserving malformed syntax as bad nodes.
+func GetRecoveredCompilationUnit(cx *context.CompilerContext, syntaxTree *tree.SyntaxTree) *BLangCompilationUnit {
+	nodeBuilder := NewRecoveringNodeBuilder(cx)
 	compilationUnit := nodeBuilder.TransformModulePart(syntaxTree.RootNode.(*tree.ModulePart))
 	return compilationUnit.(*BLangCompilationUnit)
 }

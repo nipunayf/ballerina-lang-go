@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"iter"
 	"math"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -83,24 +82,13 @@ const (
 	NodeBuilderModeRecover
 )
 
-type syntaxDiagnosticKey struct {
-	node       tree.STNode
-	messageKey string
-}
-
 type NodeBuilder struct {
-	PackageID                 *model.PackageID
-	anonTypeNameSuffixes      []string // Stack for anonymous type name suffixes
-	additionalStatements      []StatementNode
-	currentCompUnit           *BLangCompilationUnit
-	CurrentCompUnitName       string
-	isInLocalContext          bool
-	isInFiniteContext         bool
-	constantSet               map[string]string // Track declared constants to detect redeclarations
-	cx                        *context.CompilerContext
-	types                     typeTable
-	mode                      NodeBuilderMode
-	reportedSyntaxDiagnostics map[syntaxDiagnosticKey]struct{}
+	PackageID            *model.PackageID
+	anonTypeNameSuffixes []string // Stack for anonymous type name suffixes
+	currentCompUnit      *BLangCompilationUnit
+	cx                   *context.CompilerContext
+	types                typeTable
+	mode                 NodeBuilderMode
 }
 
 func (n *NodeBuilder) de() *diagnostics.DiagnosticEnv {
@@ -118,12 +106,10 @@ func NewRecoveringNodeBuilder(cx *context.CompilerContext) *NodeBuilder {
 
 func newNodeBuilder(cx *context.CompilerContext, mode NodeBuilderMode) *NodeBuilder {
 	nodeBuilder := &NodeBuilder{
-		constantSet:               make(map[string]string),
-		cx:                        cx,
-		PackageID:                 cx.GetDefaultPackage(),
-		types:                     newTypeTable(),
-		mode:                      mode,
-		reportedSyntaxDiagnostics: make(map[syntaxDiagnosticKey]struct{}),
+		cx:        cx,
+		PackageID: cx.GetDefaultPackage(),
+		types:     newTypeTable(),
+		mode:      mode,
 	}
 	return nodeBuilder
 }
@@ -630,7 +616,11 @@ func diagnosticMessage(diagnostic tree.STNodeDiagnostic) string {
 }
 
 func (n *NodeBuilder) getPosition(node tree.Node) diagnostics.Location {
-	return n.location(node, node.TextRange())
+	textRange := node.TextRange()
+	if n.mode == NodeBuilderModeRecover {
+		textRange = node.TextRangeWithMinutiae()
+	}
+	return n.location(node, textRange)
 }
 
 func (n *NodeBuilder) getRecoveryPosition(node tree.Node) diagnostics.Location {
@@ -648,8 +638,8 @@ func (n *NodeBuilder) getPositionRange(startNode tree.Node, endNode tree.Node) d
 }
 
 func (n *NodeBuilder) getPositionWithoutMetadata(node tree.Node) diagnostics.Location {
-	textRange := node.TextRange()
-	return diagnostics.NewLocation(n.de(), getFileName(node), metadataExcludedStartOffset(node, textRange.StartOffset), textRange.EndOffset)
+	pos := n.getPosition(node)
+	return diagnostics.NewLocation(n.de(), getFileName(node), metadataExcludedStartOffset(node, pos.StartOffset()), pos.EndOffset())
 }
 
 func metadataExcludedStartOffset(node tree.Node, defaultStartOffset int) int {
@@ -900,7 +890,7 @@ func (n *NodeBuilder) createTypeNode(typeNode tree.Node) TypeDescriptor {
 	if err == nil {
 		return result
 	}
-	if n.recovering() {
+	if n.mode == NodeBuilderModeRecover {
 		return n.badTypeNode(typeNode)
 	}
 	panic(err)
@@ -1047,13 +1037,13 @@ func setIdentifierValue(identifier IdentifierNode, value string) {
 
 func (n *NodeBuilder) createIdentifierNodeFromToken(pos diagnostics.Location, token tree.Token) IdentifierNode {
 	if token == nil {
-		if n.recovering() {
+		if n.mode == NodeBuilderModeRecover {
 			return n.badIdentifier(token)
 		}
 		panic("missing identifier token")
 	}
 	if token.IsMissing() || isUnsupportedIdentifierToken(token) {
-		if n.recovering() {
+		if n.mode == NodeBuilderModeRecover {
 			return n.badIdentifier(token)
 		}
 		panic("invalid identifier")
@@ -1182,7 +1172,7 @@ func isType(nodeKind common.SyntaxKind) bool {
 
 // createSimpleLiteral creates a simple literal from a node
 func (n *NodeBuilder) createSimpleLiteral(literal tree.Node) LiteralNode {
-	return n.createSimpleLiteralInner(literal, n.isInFiniteContext)
+	return n.createSimpleLiteralInner(literal)
 }
 
 // getIntegerLiteral parses integer literals (decimal/hex)
@@ -1283,7 +1273,7 @@ func isNumericLiteral(kind common.SyntaxKind) bool {
 }
 
 // createSimpleLiteralInner creates a simple literal from a node
-func (n *NodeBuilder) createSimpleLiteralInner(literal tree.Node, isFiniteType bool) LiteralNode {
+func (n *NodeBuilder) createSimpleLiteralInner(literal tree.Node) LiteralNode {
 	var bLiteral LiteralNode
 	kind := literal.Kind()
 	var typeTag TypeTags = -1
@@ -1319,14 +1309,8 @@ func (n *NodeBuilder) createSimpleLiteralInner(literal tree.Node, isFiniteType b
 			} else {
 				typeTag = TypeTags_FLOAT
 			}
-			if isFiniteType {
-				// Remove f, d, and + suffixes
-				value = regexp.MustCompile("[fd+]").ReplaceAllString(textValue, "")
-				originalValue = new(strings.ReplaceAll(textValue, "+", ""))
-			} else {
-				value = textValue
-				originalValue = &textValue
-			}
+			value = textValue
+			originalValue = &textValue
 		default:
 			// TODO: Check effect of mapping negative(-) numbers as unary-expr
 			typeTag = TypeTags_FLOAT
@@ -1419,10 +1403,8 @@ func (n *NodeBuilder) TransformModulePart(modulePartNode *tree.ModulePart) BLang
 	compilationUnit := BLangCompilationUnit{}
 	n.currentCompUnit = &compilationUnit
 	defer func() { n.currentCompUnit = nil }()
-	compilationUnit.Name = n.CurrentCompUnitName
 	compilationUnit.packageID = n.PackageID
 	pos := n.getPosition(modulePartNode)
-	compUnit := createIdentifier(pos, &n.CurrentCompUnitName, &n.CurrentCompUnitName)
 
 	if modulePartNode.HasDiagnostics() {
 		n.syntaxError(modulePartNode)
@@ -1432,15 +1414,14 @@ func (n *NodeBuilder) TransformModulePart(modulePartNode *tree.ModulePart) BLang
 	imports := modulePartNode.Imports()
 	for importDecl := range imports.Iterator() {
 		if importDecl.HasDiagnostics() {
-			n.syntaxError(importDecl)
-			if n.recovering() {
+			if n.mode == NodeBuilderModeRecover {
 				compilationUnit.AddTopLevelNode(n.badTopLevel(importDecl))
 			}
 			continue
 		}
-		node, err := n.transformImportTopLevel(importDecl, &compUnit)
+		node, err := n.transformImportTopLevel(importDecl)
 		if err != nil {
-			if n.recovering() {
+			if n.mode == NodeBuilderModeRecover {
 				node = n.badTopLevel(importDecl)
 			} else {
 				panic(err)
@@ -1455,11 +1436,10 @@ func (n *NodeBuilder) TransformModulePart(modulePartNode *tree.ModulePart) BLang
 		// Dispatch to TransformSyntaxNode which handles all node types
 		var memberNode tree.Node = member
 		if memberNode.HasDiagnostics() {
-			n.syntaxError(memberNode)
-			if !n.recovering() {
+			if n.mode != NodeBuilderModeRecover {
 				continue
 			}
-			if !n.shouldDescendDiagnosticTopLevel(memberNode) {
+			if memberNode.Kind() != common.FUNCTION_DEFINITION {
 				compilationUnit.AddTopLevelNode(n.badTopLevel(memberNode))
 				continue
 			}
@@ -1619,19 +1599,13 @@ func (n *NodeBuilder) populateFunctionNode(name IdentifierNode, qualifierList tr
 	}
 }
 
-func (n *NodeBuilder) transformImportTopLevel(importDecl *tree.ImportDeclarationNode, compUnit *BLangIdentifier) (TopLevelNode, error) {
+func (n *NodeBuilder) transformImportTopLevel(importDecl *tree.ImportDeclarationNode) (TopLevelNode, error) {
 	transformedNode := n.TransformImportDeclaration(importDecl)
 	bLangImport, ok := transformedNode.(*BLangImportPackage)
 	if !ok {
 		return nil, fmt.Errorf("syntax node %T transformed to non-import node %T", importDecl, transformedNode)
 	}
-	bLangImport.CompUnit = compUnit
 	return bLangImport, nil
-}
-
-// @cleanup inline
-func (n *NodeBuilder) shouldDescendDiagnosticTopLevel(node tree.Node) bool {
-	return node.Kind() == common.FUNCTION_DEFINITION
 }
 
 func (n *NodeBuilder) transformTopLevel(node tree.Node) (TopLevelNode, error) {
@@ -1639,7 +1613,7 @@ func (n *NodeBuilder) transformTopLevel(node tree.Node) (TopLevelNode, error) {
 	if err == nil {
 		return result, nil
 	}
-	if n.recovering() {
+	if n.mode == NodeBuilderModeRecover {
 		return n.badTopLevel(node), nil
 	}
 	return nil, err
@@ -1864,28 +1838,20 @@ func (n *NodeBuilder) populateServiceQualifiers(service *BLangService, node *tre
 func (n *NodeBuilder) populateServiceAttachPoint(service *BLangService, node *tree.ServiceDeclarationNode) {
 	paths := node.AbsoluteResourcePath()
 	if node.HasDiagnostics() {
-		n.syntaxError(node)
 		return
 	}
 	for i := 0; i < paths.Size(); i++ {
 		seg := paths.Get(i)
+		if seg.Kind() == common.STRING_LITERAL {
+			service.AttachPointLiteral = n.createSimpleLiteral(seg).(*BLangLiteral) //nolint:forcetypeassert // string literals always create BLangLiteral nodes
+			continue
+		}
 		tok, ok := seg.(tree.Token)
 		if !ok {
 			n.cx.InternalError("unexpected node in service attach point", n.getPosition(seg))
 			continue
 		}
 		switch tok.Kind() {
-		case common.STRING_LITERAL:
-			lit, ok := n.createExpression(tok).(*BLangLiteral)
-			if !ok {
-				n.cx.InternalError("invalid service attach point literal", n.getPosition(tok))
-				continue
-			}
-			if _, isString := lit.GetValue().(string); !isString {
-				n.cx.InternalError("service attach point literal must be a string", n.getPosition(tok))
-				continue
-			}
-			service.AttachPointLiteral = lit
 		case common.IDENTIFIER_TOKEN:
 			ident := createIdentifierFromToken(n.getPosition(tok), tok)
 			service.AbsoluteResourcePath = append(service.AbsoluteResourcePath, ident)
@@ -2077,9 +2043,7 @@ func (n *NodeBuilder) createBLangVarDef(location diagnostics.Location, typedBind
 
 func (n *NodeBuilder) TransformBlockStatement(blockStatementNode *tree.BlockStatementNode) BLangNode {
 	bLBlockStmt := BLangBlockStmt{}
-	n.isInLocalContext = true
 	bLBlockStmt.Stmts = n.generateBLangStatements(blockStatementNode.Statements(), blockStatementNode)
-	n.isInLocalContext = false
 	bLBlockStmt.pos = n.getPosition(blockStatementNode)
 	return &bLBlockStmt
 }
@@ -2094,7 +2058,7 @@ func (n *NodeBuilder) transformStatement(statement tree.StatementNode) Statement
 	if err == nil {
 		return result
 	}
-	if n.recovering() {
+	if n.mode == NodeBuilderModeRecover {
 		return n.badStmt(statement)
 	}
 	panic(err)
@@ -2104,7 +2068,7 @@ func (n *NodeBuilder) transformStatementInner(statement tree.StatementNode) (Sta
 	if statement == nil {
 		return nil, fmt.Errorf("statement is nil")
 	}
-	// @refactor: Ideally we should have a switch that handles all possible stmt nodes instead.
+	// TODO: Ideally we should have a switch that handles all possible stmt nodes instead.
 	transformedNode := n.TransformSyntaxNode(statement)
 	stmt, ok := transformedNode.(StatementNode)
 	if !ok {
@@ -2121,11 +2085,8 @@ func (n *NodeBuilder) generateAndAddBLangStatements(statementNodes tree.NodeList
 		if currentStatement == nil {
 			continue
 		}
-		if currentStatement.HasDiagnostics() {
-			n.syntaxError(currentStatement)
-			if !n.recovering() {
-				continue
-			}
+		if currentStatement.HasDiagnostics() && n.mode != NodeBuilderModeRecover {
+			continue
 		}
 		if currentStatement.Kind() == common.FORK_STATEMENT {
 			forkStmt := currentStatement.(*tree.ForkStatementNode)
@@ -2145,9 +2106,7 @@ func (n *NodeBuilder) generateAndAddBLangStatements(statementNodes tree.NodeList
 			}
 			bLBlockStmt := &BLangBlockStmt{}
 			nextStmtIndex := j + 1
-			n.isInLocalContext = true
 			n.generateAndAddBLangStatements(statementNodes, &bLBlockStmt.Stmts, nextStmtIndex, endNode)
-			n.isInLocalContext = false
 			if nextStmtIndex <= lastStmtIndex {
 				bLBlockStmt.pos = n.getPositionRange(statementNodes.Get(nextStmtIndex), endNode)
 			}
@@ -2199,14 +2158,11 @@ func (n *NodeBuilder) createSpecificFieldNameLiteral(fieldName tree.Node) BLangE
 }
 
 func (n *NodeBuilder) createExpression(expressionNode tree.Node) BLangExpression {
-	if expressionNode != nil && expressionNode.HasDiagnostics() {
-		n.syntaxError(expressionNode)
-	}
 	result, err := n.createExpressionInner(expressionNode)
 	if err == nil {
 		return result
 	}
-	if n.recovering() {
+	if n.mode == NodeBuilderModeRecover {
 		return n.badExprOrAction(expressionNode)
 	}
 	panic(err)
@@ -2226,14 +2182,11 @@ func (n *NodeBuilder) createExpressionInner(expressionNode tree.Node) (BLangExpr
 
 // createActionOrExpression creates an action or expression node from a syntax tree node
 func (n *NodeBuilder) createActionOrExpression(actionOrExpression tree.Node) BLangActionOrExpression {
-	if actionOrExpression != nil && actionOrExpression.HasDiagnostics() {
-		n.syntaxError(actionOrExpression)
-	}
 	result, err := n.createActionOrExpressionInner(actionOrExpression)
 	if err == nil {
 		return result
 	}
-	if n.recovering() {
+	if n.mode == NodeBuilderModeRecover {
 		return n.badExprOrAction(actionOrExpression)
 	}
 	panic(err)
@@ -2627,24 +2580,6 @@ func (n *NodeBuilder) TransformConstantDeclaration(constantDeclarationNode *tree
 		constantNode.SetPublic()
 	}
 
-	constantName := constantNode.Name.GetValue()
-
-	if initializedValue, exists := n.constantSet[constantName]; exists {
-		if initializedValue != "" {
-			n.cx.SemanticError(
-				fmt.Sprintf("symbol '%s' is already initialized with '%s'", constantName, initializedValue),
-				constantNode.Name.GetPosition(),
-			)
-		} else {
-			n.cx.SemanticError(
-				fmt.Sprintf("symbol '%s' is already initialized", constantName),
-				constantNode.Name.GetPosition(),
-			)
-		}
-	} else {
-		n.constantSet[constantName] = getConstantInitValue(constantNode.Expr)
-	}
-
 	return constantNode
 }
 
@@ -3010,8 +2945,8 @@ func (n *NodeBuilder) TransformAnnotation(annotationNode *tree.AnnotationNode) B
 	annotation := &BLangAnnotationAttachment{}
 	annotation.SetPosition(n.getPosition(annotationNode))
 	nameReference := n.createBLangNameReference(annotationNode.AnnotReference())
-	annotation.PkgAlias, _ = nameReference[0].(*BLangIdentifier)
-	annotation.AnnotationName, _ = nameReference[1].(*BLangIdentifier)
+	annotation.PkgAlias = nameReference[0]
+	annotation.AnnotationName = nameReference[1]
 	if value := annotationNode.AnnotValue(); value != nil && !value.IsMissing() {
 		annotation.Expr = n.createExpression(value)
 		annotation.HasValue = true
@@ -3253,7 +3188,6 @@ func (n *NodeBuilder) populateXMLNS(target *BLangXMLNS, pos diagnostics.Location
 
 func (n *NodeBuilder) TransformFunctionBodyBlock(functionBodyBlockNode *tree.FunctionBodyBlockNode) BLangNode {
 	bLFuncBody := &BLangBlockFunctionBody{}
-	n.isInLocalContext = true
 	statements := []StatementNode{}
 	stmtList := statements
 	namedWorkerDeclarator := functionBodyBlockNode.NamedWorkerDeclarator()
@@ -3265,7 +3199,6 @@ func (n *NodeBuilder) TransformFunctionBodyBlock(functionBodyBlockNode *tree.Fun
 
 	bLFuncBody.Stmts = stmtList
 	bLFuncBody.pos = n.getPosition(functionBodyBlockNode)
-	n.isInLocalContext = false
 	return bLFuncBody
 }
 
@@ -4688,8 +4621,8 @@ func (n *NodeBuilder) TransformAnnotAccessExpression(annotAccessBLangExpression 
 	expr := &BLangAnnotAccessExpr{}
 	expr.Expr = n.createExpression(annotAccessBLangExpression.Expression())
 	nameReference := n.createBLangNameReference(annotAccessBLangExpression.AnnotTagReference())
-	expr.PkgAlias, _ = nameReference[0].(*BLangIdentifier)
-	expr.AnnotationName, _ = nameReference[1].(*BLangIdentifier)
+	expr.PkgAlias = nameReference[0]
+	expr.AnnotationName = nameReference[1]
 	expr.SetPosition(n.getPosition(annotAccessBLangExpression))
 	return expr
 }
@@ -4741,10 +4674,7 @@ func (n *NodeBuilder) TransformEnumDeclaration(enumDeclarationNode *tree.EnumDec
 			n.cx.InternalError("missing enum member identifier", n.getPosition(enumMember))
 			continue
 		}
-		constantNode, redeclared := n.transformEnumMember(enumMember, publicQualifier)
-		if redeclared {
-			continue
-		}
+		constantNode := n.transformEnumMember(enumMember, publicQualifier)
 		if n.currentCompUnit == nil {
 			n.cx.InternalError("enum constants can only be added at module level", n.getPosition(enumMember))
 			continue
@@ -4791,11 +4721,10 @@ func (n *NodeBuilder) TransformEnumDeclaration(enumDeclarationNode *tree.EnumDec
 }
 
 func (n *NodeBuilder) TransformEnumMember(enumMemberNode *tree.EnumMemberNode) BLangNode {
-	constantNode, _ := n.transformEnumMember(enumMemberNode, false)
-	return constantNode
+	return n.transformEnumMember(enumMemberNode, false)
 }
 
-func (n *NodeBuilder) transformEnumMember(enumMemberNode *tree.EnumMemberNode, publicQualifier bool) (*BLangConstant, bool) {
+func (n *NodeBuilder) transformEnumMember(enumMemberNode *tree.EnumMemberNode, publicQualifier bool) *BLangConstant {
 	constantNode := createConstantNode()
 	constantNode.pos = n.getPositionWithoutMetadata(enumMemberNode)
 	if publicQualifier {
@@ -4822,15 +4751,7 @@ func (n *NodeBuilder) transformEnumMember(enumMemberNode *tree.EnumMemberNode, p
 		constantNode.MarkdownDocumentationAttachment = n.createMarkdownDocumentationAttachment(docString)
 	}
 
-	constantName := constantNode.Name.GetValue()
-	if _, exists := n.constantSet[constantName]; exists {
-		n.cx.SemanticError("redeclared symbol '"+constantName+"'", constantNode.Name.GetPosition())
-		return nil, true
-	} else {
-		n.constantSet[constantName] = getConstantInitValue(constantNode.Expr)
-	}
-
-	return constantNode, false
+	return constantNode
 }
 
 func (n *NodeBuilder) TransformArrayTypeDescriptor(arrayTypeDescriptorNode *tree.ArrayTypeDescriptorNode) BLangNode {
@@ -5815,20 +5736,6 @@ func (n *NodeBuilder) TransformIdentifierToken(identifier *tree.IdentifierToken)
 	panic("TransformIdentifierToken unimplemented")
 }
 
-func getConstantInitValue(expr BLangActionOrExpression) string {
-	type constantValue interface {
-		GetValue() any
-		GetOriginalValue() string
-	}
-	if cv, ok := expr.(constantValue); ok {
-		if v := cv.GetValue(); v != nil {
-			return fmt.Sprintf("%v", v)
-		}
-		return cv.GetOriginalValue()
-	}
-	return ""
-}
-
 func stringToTypeKind(typeText string) TypeKind {
 	switch typeText {
 	case "int":
@@ -5953,7 +5860,7 @@ func (n *NodeBuilder) badTypeNode(node tree.Node) *BLangBadTypeNode {
 func (n *NodeBuilder) badIdentifier(token tree.Token) *BLangBadIdentifier {
 	bad := &BLangBadIdentifier{}
 	if token != nil {
-		bad.Value, _ = normalizedIdentifierValue(token.Text())
+		bad.Value, bad.isLiteral = normalizedIdentifierValue(token.Text())
 		bad.OriginalValue = token.Text()
 		bad.SetPosition(n.getRecoveryPosition(token))
 	} else {
@@ -5973,11 +5880,6 @@ func (n *NodeBuilder) syntaxError(node tree.Node) {
 			continue
 		}
 		for _, diagnostic := range deep.Diagnostics() {
-			key := syntaxDiagnosticKey{node: deep, messageKey: diagnostic.DiagnosticCode().MessageKey()}
-			if _, exists := n.reportedSyntaxDiagnostics[key]; exists {
-				continue
-			}
-			n.reportedSyntaxDiagnostics[key] = struct{}{}
 			n.cx.SyntaxError(diagnosticMessage(diagnostic), n.getPosition(diagnosticNode))
 		}
 	}
