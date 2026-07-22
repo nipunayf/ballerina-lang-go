@@ -26,6 +26,7 @@ package pal
 import (
 	"context"
 	"io"
+	"io/fs"
 	"net/http"
 	"time"
 )

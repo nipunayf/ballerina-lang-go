@@ -41,9 +41,6 @@ type documentContext struct {
 	textDocument   text.TextDocument
 	syntaxTreeOnce sync.Once
 	textDocOnce    sync.Once
-
-	parseDuration           time.Duration
-	parseDurationRecordOnce sync.Once
 }
 
 // newDocumentContext creates a documentContext from DocumentConfig.
@@ -130,7 +127,6 @@ func (d *documentContext) parseWithStats(cx *compilercontext.CompilerContext) *t
 		d.syntaxTree = d.parseContent(d.content(), textDoc)
 		recordParseDuration(cx, time.Since(start))
 	})
-	d.recordCachedParseDuration(cx)
 	return d.syntaxTree
 }
 
