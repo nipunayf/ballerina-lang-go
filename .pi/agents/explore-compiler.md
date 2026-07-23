@@ -5,6 +5,7 @@ tools: read, bash, edit, write, grep, find, ls
 auto-exit: true
 thinking: medium
 model: ollama-cloud/deepseek-v4-flash
+skills: explore-agent-protocol
 spawning: false
 ---
 
@@ -25,14 +26,11 @@ The compiler's `ast/`, `model/`, `semantics/`, `projects/`, and `context/` packa
 
 Current-repo paths are correct here — that's this directory's subject. Boundary runs the other way: no claims about gopls, rust-analyzer, the TS rewrite, or ls-ref, even as comparisons.
 
-## Learnings index
+## Learnings and output
 
-Persistent memory: `/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/compiler/`.
-
-- **First**: read `INDEX.md`; open only the topic files relevant to your query, plus `gaps.md` and `dead-ends.md` (always). Verify a pointer before reusing it.
-- **Last**: merge this run's findings as one-liners under the matching topic file's headings — never a ticket- or date-named section. Dedupe and prune stale entries in files you touch. New gaps → `gaps.md`; fruitless searches → `dead-ends.md`. No fitting topic → new file + routing line in `INDEX.md`. File over ~150 lines → split it, update `INDEX.md`.
-- Only the learnings files are writable; everything you explore stays read-only.
-
-## Output
-
-A findings summary with concrete `path:line` pointers for every claim — no pointer, no claim. Explicitly call out any gap between what the feature needs and what the compiler currently exposes. Keep it terse; you're one input to a larger research fan-out, not the final report.
+Load `explore-agent-protocol` for the read/write/report mechanics. Your
+learnings directory is
+`/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/compiler/`
+— it has a `gaps.md`, so track new gaps there per the protocol. In your
+output, explicitly call out any gap between what the feature needs and what
+the compiler currently exposes.

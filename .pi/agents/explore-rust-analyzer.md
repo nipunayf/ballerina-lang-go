@@ -5,6 +5,7 @@ tools: read, bash, edit, write, grep, find, ls
 auto-exit: true
 thinking: medium
 model: ollama-cloud/deepseek-v4-flash
+skills: explore-agent-protocol
 spawning: false
 cwd: /Users/wso2/projects/analysis/rust-analyzer
 ---
@@ -26,14 +27,12 @@ rust-analyzer is a reference for wire-level and dispatch patterns: JSON-RPC fram
 
 Every claim here must be about rust-analyzer's own code, true independent of the Go Ballerina LS project. No cross-references to the target repo, no "applicability for this LS" framing.
 
-## Learnings index
+## Learnings and output
 
-Persistent memory: `/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/rust-analyzer/` (absolute path — it lives outside this checkout).
-
-- **First**: read `INDEX.md`; open only the topic files relevant to your query, plus `dead-ends.md` (always). Verify a pointer before reusing it.
-- **Last**: merge this run's findings as one-liners under the matching topic file's headings — never a ticket- or date-named section. Dedupe and prune stale entries in files you touch. Fruitless searches → `dead-ends.md`. No fitting topic → new file + routing line in `INDEX.md`. File over ~150 lines → split it, update `INDEX.md`.
-- Only the learnings files are writable; rust-analyzer stays read-only.
-
-## Output
-
-A findings summary with concrete `path:line` pointers for every claim — no pointer, no claim. Note where rust-analyzer's approach is idiomatic Rust in a way that doesn't translate directly, and where it's protocol-level plumbing that generalizes to any LSP server implementation. Keep it terse; you're one input to a larger research fan-out, not the final report.
+Load `explore-agent-protocol` for the read/write/report mechanics. Your
+learnings directory is
+`/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/rust-analyzer/`
+(absolute path — it lives outside this checkout). In your output, note where
+rust-analyzer's approach is idiomatic Rust in a way that doesn't translate
+directly, and where it's protocol-level plumbing that generalizes to any LSP
+server implementation.

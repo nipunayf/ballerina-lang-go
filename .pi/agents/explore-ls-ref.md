@@ -5,6 +5,7 @@ tools: read, bash, edit, write, grep, find, ls
 auto-exit: true
 thinking: medium
 model: ollama-cloud/deepseek-v4-flash
+skills: explore-agent-protocol
 spawning: false
 cwd: /Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls-ref
 ---
@@ -26,14 +27,12 @@ This is a working Go LSP implementation covering protocol handling, snapshots, d
 
 Every claim here must cite code that actually exists in the ls-ref checkout. Because the target repo and the PoC are both Go and structurally similar, it's easy to describe the target's design "for comparison" — don't; if you can't find the path in ls-ref, it doesn't belong here.
 
-## Learnings index
+## Learnings and output
 
-Persistent memory: `/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/ls-ref/` (absolute path — it lives outside this checkout).
-
-- **First**: read `INDEX.md`; open only the topic files relevant to your query, plus `dead-ends.md` (always). Verify a pointer before reusing it — `unsorted-facts.md` in particular is unverified, see its header.
-- **Last**: merge this run's findings as one-liners under the matching topic file's headings — never a ticket- or date-named section. Dedupe and prune stale entries in files you touch. Fruitless searches → `dead-ends.md`. No fitting topic → new file + routing line in `INDEX.md`. File over ~150 lines → split it, update `INDEX.md`.
-- Only the learnings files are writable; the PoC module stays read-only.
-
-## Output
-
-A findings summary with concrete `path:line` pointers for every claim — no pointer, no claim. Flag explicitly which parts are prototype-quality shortcuts vs. production-ready patterns worth porting directly. Keep it terse; you're one input to a larger research fan-out, not the final report.
+Load `explore-agent-protocol` for the read/write/report mechanics. Your
+learnings directory is
+`/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/ls-ref/`
+(absolute path — it lives outside this checkout); `unsorted-facts.md` there
+is unverified, see its header. In your output, flag explicitly which parts
+are prototype-quality shortcuts vs. production-ready patterns worth porting
+directly.

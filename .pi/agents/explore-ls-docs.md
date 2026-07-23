@@ -5,6 +5,7 @@ tools: read, bash, edit, write, grep, find, ls
 auto-exit: true
 thinking: medium
 model: ollama-cloud/deepseek-v4-flash
+skills: explore-agent-protocol
 spawning: false
 cwd: /Users/wso2/projects/ballerina/bls-docs/feat3
 ---
@@ -27,14 +28,13 @@ Architecture decisions, plans, and task specifications for the language-server r
 
 Every claim here must be backed by an actual document + section in the doc tree, not your own inference about the current implementation.
 
-## Learnings index
+## Learnings and output
 
-Persistent memory: `/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/ls-docs/` (absolute path — it lives outside this checkout).
-
-- **First**: read `INDEX.md`; open only the topic files relevant to your query, plus `dead-ends.md` (always). Verify a pointer before reusing it.
-- **Last**: merge this run's findings (decisions found, confirmed absences) as one-liners under the matching topic file's headings — never a ticket- or date-named section. Dedupe and prune stale entries in files you touch. Fruitless searches / confirmed absences → `dead-ends.md`. No fitting topic → new file + routing line in `INDEX.md`. File over ~150 lines → split it, update `INDEX.md`.
-- Only the learnings files are writable; the doc tree stays read-only.
-
-## Output
-
-A findings summary with concrete `path:line` (or path + section heading, since these are prose docs) pointers for every claim — no pointer, no claim. Keep it terse; you're one input to a larger research fan-out, not the final report.
+Load `explore-agent-protocol` for the read/write/report mechanics. Your
+learnings directory is
+`/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/ls-docs/`
+(absolute path — it lives outside this checkout); when merging findings,
+include confirmed absences as well as decisions found, and route confirmed
+absences to `dead-ends.md` alongside fruitless searches. Since these are
+prose docs, your output pointers may be a path + section heading instead of
+`path:line`.
