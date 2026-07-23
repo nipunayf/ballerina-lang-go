@@ -1,6 +1,6 @@
 ---
 name: ls-iteration
-description: Orchestrate one iteration of the language-server engineering loop — the stages, and which skill to invoke when. Use when the user wants LS work done — implement a handler or shared API, resolve an LS design decision, or chart the LS backlog.
+description: Orchestrate one iteration of the language-server engineering loop — the stages, and which skill to invoke when. Use when the user wants LS work done.
 ---
 
 One invocation = one ticket from the LS backlog. This skill holds the loop and the routing; the stage mechanics live in dedicated skills — invoke them at the points below.

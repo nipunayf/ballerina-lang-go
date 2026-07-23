@@ -1,9 +1,9 @@
 ---
 name: ls-backlog
-description: Operate the LS wayfinder backlog in docs/raw/ls-backlog/ — pick/claim/create/resolve tickets, chart new ones when the frontier is empty, tend fog and out-of-scope. Use at the bookends of an ls-iteration, or standalone when the user wants to chart, groom, or inspect the LS backlog.
+description: Operate the LS backlog in docs/raw/ls-backlog/ — pick/claim/create/resolve tickets, chart new ones when the frontier is empty, tend fog and out-of-scope. Use at the bookends of an ls-iteration, or standalone when the user wants to chart, groom, or inspect the LS backlog.
 ---
 
-The LS backlog is a wayfinder-style markdown tracker living under `docs/raw/ls-backlog/` in the docs vault — a separate repo from this worktree, so nothing here is committed to `ls`. Curating any of it into the indexed wiki (see "Resolve" and "Milestone fold") is the docs vault's own concern, not this skill's — this skill only reads/writes the raw working state.
+The LS backlog is a markdown tracker living under `docs/raw/ls-backlog/` in the docs vault — a separate repo from this worktree, so nothing here is committed to `ls`. Curating any of it into the indexed wiki (see "Resolve" and "Milestone fold") is the docs vault's own concern, not this skill's — this skill only reads/writes the raw working state.
 
 ## Layout
 
@@ -22,7 +22,7 @@ The LS backlog is a wayfinder-style markdown tracker living under `docs/raw/ls-b
 
 ## Ticket types (`Type:` line)
 
-The wayfinder set plus one execution type — this map carries implementation, an explicit Notes override of wayfinder's plan-don't-do default:
+The base set plus one execution type — this map carries implementation, an explicit Notes override of the plan-don't-do default:
 
 | Type | Human in loop? | What it is |
 |---|---|---|
