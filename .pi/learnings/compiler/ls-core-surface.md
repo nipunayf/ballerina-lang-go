@@ -58,7 +58,15 @@ Paths here are relative to `ballerina-lang-go/ls/`. This code evolves per ticket
 ## Query service (ls/core/query)
 
 - `query.Service` — wraps `*workspace.ProjectService`; exposes `DocumentSymbols(uri)` and `Completion(uri, byteOffset, ctx)`. `ls/ls/core/query/query.go:60-70`, `ls/ls/core/query/completion.go:100-130`
+- `Service` struct fields: `projects *workspace.ProjectService`, `compiler CompletionLeaser`. `ls/ls/core/query/query.go:55-58`
+- `New(projects)` — creates Service with nil compiler (completion falls back to syntax-only). `ls/ls/core/query/query.go:60-62`
+- `SetCompletionCompiler(compiler)` — wires the non-blocking lease provider. `ls/ls/core/query/completion.go:380-385`
 - `Completion` is the protocol-free entry point: classifies cursor context via `classifyContext()` (red-node tree only), dispatches to `completeFunctionBody`, `completeModulePart`, `completeImport`, `completeAliasMember`. `ls/ls/core/query/completion.go:100-130`
+- `importCatalog(fileKey)` — acquires generation-matched lease, returns `*projects.ImportCatalog` or nil. `ls/ls/core/query/completion.go:350-370`
+- Pattern: `snap, ok := s.projects.Snapshot(u)` → `lease, ok := s.compiler.Lease(snap.SourceRoot, snap.Generation)` → `lease.Index()` / `lease.ExpectedTypeIndex()` / `lease.ImportCatalog()` → `lease.Release()`. `completion.go:300-330`
+- `CompletionLease` interface — `Index()`, `ExpectedTypeIndex()`, `ImportCatalog()`, `MemberCompletionIndex()`, `InvocationCompletionIndex()`, `Release()`. `ls/ls/core/query/completion.go:20-30`
+- `CompletionLeaser` interface — `Lease(root string, generation uint64) (CompletionLease, bool)`. `ls/ls/core/query/completion.go:35-40`
+- `completionLeaseAdapter` (server) — adapts `compile.CompilationService.Lease()` to `query.CompletionLeaser`. `ls/ls/server/completion.go:20-35`
 - `classifyContext(part, offset, text)` — classifies cursor as `contextFunctionBody`, `contextModulePart`, `contextImport`, `contextAliasMember`, or `contextUnsupported`. Walks red-node tree only; no compiler objects. `ls/ls/core/query/completion_module.go:100-140`
 - `classifyCompletion(part, offset, text)` — for function-body positions, extracts parameters and preceding locals from red-node tree. `ls/ls/core/query/completion.go:200-240`
 - `classifyAliasMember(part, offset, text)` — detects `alias.<prefix>` access. `ls/ls/core/query/completion_module.go:200-230`

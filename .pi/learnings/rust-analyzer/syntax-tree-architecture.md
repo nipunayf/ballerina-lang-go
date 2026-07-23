@@ -39,3 +39,38 @@ Three-layer structure, not two:
 3. **HIR** (ItemTree, Body, Type, ExprScopes, etc.) — semantic layer built **on top** of syntax via Salsa queries; queries take syntax as input, build and cache semantic facts, maintain source maps back to syntax.
 
 **Key invariant:** HIR does not eliminate the syntax tree. Salsa memoization wraps both layers, so changing a file invalidates both parse and all downstream HIR queries. Completion and other IDE features query both layers: syntax for position/token/trivia facts, HIR for scopes/types/resolution.
+
+## Abstraction boundaries
+
+### Layer cake (top to bottom)
+1. **`crates/rust-analyzer/src/`** — LSP server: `GlobalState`, `GlobalStateSnapshot`, dispatch, handlers. Owns the event loop, thread pools, VFS, `AnalysisHost`. Converts LSP types ↔ internal types.
+2. **`crates/ide/src/`** — IDE API: `Analysis`, `AnalysisHost`. LSP-independent semantic API. All methods go through `with_db()` (cancellation boundary). `completions()` delegates to `ide-completion`.
+3. **`crates/ide-completion/src/`** — Completion logic: `CompletionContext`, `CompletionAnalysis`, providers. Owns cursor classification, scope derivation, item rendering. Takes `&RootDatabase` directly.
+4. **`crates/hir/src/`** — Semantic HIR: `Semantics`, `SemanticsScope`, `SourceAnalyzer`, types, scopes. Bridges syntax positions to HIR definitions.
+5. **`crates/hir-def/`, `crates/hir-ty/`, `crates/hir-expand/`** — HIR internals: `ItemTree`, `Body`, `ExprScopes`, `InferenceResult`, macro expansion. Salsa-tracked queries.
+6. **`crates/syntax/src/`** — CST: rowan `SyntaxNode`/`GreenNode`, `ast::` typed wrappers, parser. No semantic knowledge.
+7. **`crates/base-db/src/`** — Salsa database traits: `SourceDatabase`, `RootQueryDb`. Declares `parse` query.
+
+### Key boundary: `ide` vs `ide-completion`
+- `ide/src/lib.rs:229-240` — `Analysis` is the public API; all methods return `Cancellable<T>`
+- `ide/src/lib.rs:755-760` — `Analysis::completions()` delegates to `ide_completion::completions()` — the boundary is a function call, not a trait
+- `ide-completion/src/lib.rs:191-196` — `completions()` takes `&RootDatabase` directly (not `&Analysis`), bypassing the `Cancellable` wrapper
+- **Implication:** `ide-completion` is not cancellation-aware; cancellation is handled at the `ide` layer via `with_db()`
+
+### Key boundary: `hir` vs `syntax`
+- `hir/src/semantics.rs:161-170` — `Semantics<'db, DB>` is the bridge: holds `&'db DB` + caches for source-to-def mapping and macro calls
+- `hir/src/semantics.rs:2116-2150` — `analyze_impl()`: finds the HIR container for a syntax node, creates `SourceAnalyzer`
+- `hir/src/source_analyzer.rs:71-80` — `SourceAnalyzer` wraps `resolver`, `body_or_sig`, `file_id` — never holds syntax nodes directly
+- **Direction:** Syntax → HIR is one-way via `Semantics`. HIR never holds syntax nodes; it uses `InFile<SyntaxNodePtr>` for source maps back.
+
+### Key boundary: `Semantics` vs `SemanticsScope`
+- `Semantics` is the general-purpose bridge (created per-request, cheap)
+- `SemanticsScope` is a scoped handle returned by `scope_at_offset()` — bundles `db + file_id + resolver` for a specific position
+- `SemanticsScope::process_all_names()` iterates all names visible at that scope — used by completion to populate `locals`
+- `SemanticsScope` does **not** hold a reference to the syntax tree — it's purely semantic
+
+### What this means for a Ballerina LS
+- The `ide` layer's `with_db()` cancellation boundary is idiomatic Rust (Salsa unwinding) and doesn't translate directly to Go
+- The `Semantics`/`SemanticsScope` pattern of a lightweight per-request handle that bridges syntax→semantics is protocol-level and generalizes
+- The `CompletionContext` pattern of constructing a rich context struct from both syntax (token/trivia) and semantics (scope/types) is generalizable
+- The `ide-completion` crate being a separate crate with its own `completions()` entry point (not a trait method) is a modularity choice, not protocol-level

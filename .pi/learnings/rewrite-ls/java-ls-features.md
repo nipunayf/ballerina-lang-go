@@ -26,6 +26,10 @@ Java LS root: `ballerina-lang/language-server/`.
   - Cursor is within a comment (`isWithinComment()` at `CompletionUtil.java:170`)
 - `isWithinComment()` at `CompletionUtil.java:170` — checks leading/trailing minutiae of the token at cursor for `COMMENT_MINUTIAE` spanning the cursor
 
+**Go rewrite divergence**: The Go rewrite's `cursorInComment()` (`ls/core/query/completion.go:cursorInComment`) uses a text-based scanner (not CST trivia), tracking string/template literals and line/block comments. The Java LS uses CST minutiae (`COMMENT_MINUTIAE`). The Go approach is deliberately simpler and avoids CST trivia dependency — acceptable per the design decision that `//` inside `${}` interpolation is treated as part of the template.
+
+### Provider routing (context classification)
+
 ### Provider routing (context classification)
 
 - `CompletionUtil.route()` at `CompletionUtil.java:120` — walks the AST parent ladder from cursor node upward; for each node, looks up `ProviderFactory.instance().getProviders()` by `node.getClass()`; calls `provider.onPreValidation()`; if valid and not already in `resolverChain`, selects that provider

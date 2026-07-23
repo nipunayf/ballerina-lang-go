@@ -33,10 +33,19 @@ is closed upstream.
 
 ## Concurrency hazards
 
-- **`Environment.Duplicate()` shares `CompilerEnvironment`** — symbol spaces are not deep-copied; a snapshot that modifies symbols would corrupt the original. `explore-codebase/projects/env.go:84`
-- **`DiagnosticEnv` is a per-CompilerEnvironment singleton** — shared across all compilations of the same source root; concurrent compilations overwrite each other's file registrations. `explore-codebase/context/env.go:37` (details in diagnostics.md)
-- **`CompilerContext.stage` field is unprotected** — concurrent `StartStage`/`EndStage` would race. `explore-codebase/context/context.go:38-42`
-- **`Environment.publicSymbols` map is unprotected** — concurrent access during parallel Phase 2 could race. `explore-codebase/projects/env.go:22-28`
+- **`Environment.Duplicate()` shares `CompilerEnvironment`** — symbol spaces are not deep-copied; a snapshot that modifies symbols would corrupt the original. `ls/projects/env.go:84`
+- **`DiagnosticEnv` is a per-CompilerEnvironment singleton** — shared across all compilations of the same source root. The `ls` version adds `BeginCompile()`/`EndCompile()` which namespace file registrations by compile instance, so re-compiling the same root allocates new indices for changed files and no-ops for unchanged ones (by doc pointer). This solves the pre-ticket-09 same-name/different-doc panic. `ls/tools/diagnostics/diagnostic_env.go:87-105`
+- **`CompilerContext.stage` field is unprotected** — concurrent `StartStage`/`EndStage` would race. `ls/context/context.go:38-42`
+- **`CompilerContext.ExpectedSlotRecords()` is not thread-safe** — returns the internal slice with no lock; must be called after resolution completes (no concurrent writers). `ls/context/context.go:195-198`
+- **`Environment.publicSymbols` map is unprotected** — concurrent access during parallel Phase 2 could race. `ls/projects/env.go:22-28`
+- **`ScopedSyntaxEnv.RecoveringAST()` creates a fresh `CompilerEnvironment` per request** — with its own `DiagnosticEnv`, avoiding the race with the background compile's active `BeginCompile` instance. The request-local env is used only for AST structure and byte-offset positions; no semantic resolution. `ls/projects/scoped_syntax_env.go:83`
+
+## No retained bound AST or CompilerContext in query layer
+
+- **The query layer (`ls/core/query`) has NO access to bound AST, CompilerContext, symbols, scopes, or types** — all compiler objects are private to `moduleContext` and `PackageCompilation`. The query layer reads only copied, protocol-free projections through a non-blocking lease. See `ticket-36-evaluation.md` for full analysis.
+- **No `Package.AST()` method** — `moduleContext.bLangPkg` is private; `Package` has no public AST accessor.
+- **No `PackageCompilation.CompilerContext()` method** — `moduleContext.compilerCtx` is private; `PackageCompilation` does not expose it.
+- **`SemanticModel()` returns `any` with TODO** — `ls/projects/package_compilation.go:223-227`.
 
 ## Completion-specific gaps
 
@@ -48,6 +57,10 @@ is closed upstream.
 - **No member-completion API** — `semtypes.MappingMemberTypeInnerVal`, `ObjectMemberType`, `ListMemberType` exist but require a `semtypes.Context` (thread-local) and the type value; no "what members does this type expose?" query. Deferred to ticket 19.
 - **No import-completion API** — `moduleContext.importedSymbols` is private; no "what packages can I import?" query from `ls/`. Addressed by `ImportCatalog`.
 - **No keyword-completion context** — no API to determine which keywords are valid at a given position. Addressed by hardcoded keyword lists in `ls/core/query/completion.go`.
+- **No post-compilation access to resolver-captured expected-type slots** — `CompilerContext.ExpectedSlotRecords()` is public on the compiler context, but `moduleContext.compilerCtx` is private. The `ExpectedTypeIndex` projection is the only way to surface these to `ls/`.
+- **No post-compilation access to resolved call bindings** — `BLangInvocation.RawSymbol` and `BLangRemoteMethodCallAction.RawSymbol` are set during local-node resolution but live on the private BLang AST. The `InvocationCompletionIndex` projection is the only way to surface these to `ls/`.
+- **No post-compilation access to determined types of field-access receivers** — `BLangFieldBaseAccess.Expr.GetDeterminedType()` is set during local-node resolution but lives on the private BLang AST. The `MemberCompletionIndex` projection is the only way to surface these to `ls/`.
+- **No post-compilation access to `Environment.publicSymbols`** — the map of resolved imported-module public symbol spaces is private and only accessible during the compile worker. The `ImportCatalog` projection is the only way to surface alias exports to `ls/`.
 
 ## Module discovery gaps
 
@@ -56,5 +69,6 @@ is closed upstream.
 - **No "what packages does this module import?" query from `ls/`** — `moduleContext.importedSymbols` is private. The red-node syntax tree (`Document.SyntaxTree()`) exposes `ModulePart.Imports()` which gives import declarations, but resolving them to package descriptors requires the private `moduleContext.compilerCtx`.
 - **No "what alias does this import use?" query** — import aliases are stored in `ast.BLangImportPackage.Alias` (private AST) and in the red-node `ImportDeclarationNode` (accessible but requires walking). No public API to query "what alias does module X use for package Y".
 - **`Environment.publicSymbols` is private and unprotected** — the map of compiled package symbols is not exposed from `ls/` and has no mutex. `explore-codebase/projects/env.go:37`
+- **`Environment.CompilerEnvironment()` is public but `symbolSpaces` is not directly accessible** — `CompilerEnvironment` is public via `Environment.CompilerEnvironment()` (`ls/projects/env.go:47-49`), but the `symbolSpaces` slice is private. Only `GetSymbol(ref)` and `FindSymbol(pkg, name)` are public on `CompilerEnvironment`. `FindSymbol` is documented as "potentially very slow" (`ls/context/env.go:130-141`).
 - **No public API to access `PackageCache` contents by org** — `PackageCache.GetPackages(org, name)` is public but only returns already-cached packages; no way to enumerate all cached packages. `explore-codebase/projects/package_cache.go:80-90`
 - **No public API to access `PackageResolver.Repositories()` from `ls/`** — `PackageResolver.Repositories()` is public but `Environment.PackageResolver()` is public, so this is accessible. However, `Repository` interface only has `GetPackage` and `GetPackageVersions` — no `ListPackages` or `Search` method.

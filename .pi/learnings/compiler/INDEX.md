@@ -11,6 +11,8 @@ Read this first. Open only topic files matching your query + `gaps.md` + `dead-e
 - [ls-core-surface.md](ls-core-surface.md) — LS side (`ls/core`, `ls/server`): SnapshotStore, CompilationService, ProjectService, event bus, cancellation state.
 - [semantic-query-design.md](semantic-query-design.md) — design notes for a future semantic query surface.
 - [completion-infrastructure.md](completion-infrastructure.md) — CompletionIndex, ExpectedTypeIndex, ImportCatalog, expected-type capture, query-layer classification, server adapter.
+- [completion-projection-timing.md](completion-projection-timing.md) — what completion data requires pre-desugar state vs. what can be derived post-compilation; CompletionLease boundary; gaps.
+- [post-compile-context-access.md](post-compile-context-access.md) — what compiler objects retain after compilation, public vs. private API surface, lifecycle/concurrency constraints, projection bridge design. Read for: ticket 36, on-demand semantic queries, context access feasibility.
 - [gaps.md](gaps.md) — what the compiler does NOT expose. ALWAYS read before claiming an API exists.
 - [dead-ends.md](dead-ends.md) — ALWAYS read.
 

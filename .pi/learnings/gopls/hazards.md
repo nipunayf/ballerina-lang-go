@@ -13,6 +13,16 @@
 - **Snippet builder is a separate package**: `internal/golang/completion/snippet/` — must be imported separately. Not part of the protocol layer.
 - **`SortText` hack**: positional index as sort text is a workaround for LSP issue #348. If the client doesn't support server-side ordering, this is needed.
 - **No `ResolveProvider`**: gopls does NOT implement `completionItem/resolve`. All data is returned eagerly.
+- **`methodSetCache` is per-request, not shared**: The `methodSetCache` map on the `completer` struct (`completion.go:280`) is created fresh for each request. If the same type is queried by multiple concurrent requests, each does its own `types.NewMethodSet` computation. This is acceptable because `types.NewMethodSet` is fast for typical types, but it means there's no cross-request sharing of method set computation.
+- **`tooNewSymbolsCache` is per-request**: Similarly, the `tooNewSymbolsCache` map (`completion.go:285`) is per-request. Each completion request re-computes which symbols are too new for the file's Go version.
+- **No precomputed completion index**: gopls explicitly chose not to precompute a completion-specific index. The comment in `completion.go:1310-1320` explains that the deep completion algorithm is "exceedingly complex and deeply coupled to the now obsolete notions that all token.Pos values can be interpreted by a single FileSet" — and that completion of unimported packages "cannot use the deep completion machinery which is based on type information" and instead uses "only syntax information from a quick parse."
+- **`resolveInvalid` is a heuristic**: When the type checker produces an invalid type (common during editing), `resolveInvalid` (util.go:103) constructs a fake `*types.Named` with `types.Invalid` underlying type. This is a best-effort fallback — the fake type has no methods, so method completions won't work for incompletely typed expressions.
+
+## Lease boundary hazards
+- **Snapshot holds a reference to View**: `snapshot.go:72` — `view *View`. This poses lifecycle problems: a view may be shut down while work associated with this snapshot is still in flight. The comment at `snapshot.go:66-71` acknowledges this is not formalized.
+- **`futureCache` requires retryable compute functions**: the contract (`future.go:80-82`) says compute must be safely retryable and always return the same value. This is hard to guarantee in general.
+- **No per-request snapshot isolation**: gopls doesn't pin a snapshot per request — handlers acquire the current snapshot at call time. If the snapshot is invalidated mid-request, the handler's context gets cancelled.
+- **`persistent.Map` values are reference-counted**: The `persistent.Map` (`internal/util/persistent/map.go`) reference-counts values. When a value's refcount reaches 0, the release function is called. This means values can be destroyed while a request holds a reference to the snapshot — but only if the snapshot itself is released. The snapshot's `Acquire`/`decref` pattern prevents this.
 
 ## Stale-offset prevention (DidModifyFiles → snapshot clone → FileOf → completion)
 - **No deliberate use of prior snapshot**: gopls does NOT serve completion from a stale snapshot. Every semantic handler acquires the *current* snapshot at call time via `s.session.FileOf(ctx, uri)` (session.go:458).

@@ -45,6 +45,45 @@ Keep entries summarized and pointer-dense — `path` + symbol, one line each.
 - **AST (BLang) nodes have `GetPosition() diagnostics.Location`** — byte-offset based, file-indexed — but no parent references and no position-to-node query. `ast/interfaces.go:40-45`
 - The red-node tree is the right tree for position queries; the AST carries symbols/types. No API maps between them (see gaps.md).
 
+## NodeBuilder: red→BLang transformation
+
+- `NodeBuilder` implements `tree.NodeTransformer[BLangNode]` — transforms red-node syntax tree into BLang AST. `ast/node_builder.go:136`
+- `tree.NodeTransformer[T]` interface — `TransformSyntaxNode(node Node) T` dispatches by concrete type; ~200 `Transform*` methods. `parser/tree/node_transformer.go:19-24`
+- `NewNodeBuilder(cx)` — strict mode (panics on errors). `ast/node_builder.go:110-113`
+- `NewRecoveringNodeBuilder(cx)` — recovery mode (produces `BLangBadNode` types instead of panicking). `ast/node_builder.go:115-117`
+- `NodeBuilderMode` — `NodeBuilderModeStrict` (0) / `NodeBuilderModeRecover` (1). `ast/node_builder.go:79-84`
+- `NodeBuilder.recovering()` — returns `mode == NodeBuilderModeRecover`. `ast/node_builder.go:133-135`
+- `GetCompilationUnit(cx, syntaxTree)` — public entry point: creates `NewNodeBuilder(cx)`, calls `TransformModulePart()`. `ast/ast.go:1542-1546`
+- `NodeBuilder` fields: `PackageID`, `cx *context.CompilerContext`, `types typeTable`, `mode`, `reportedSyntaxDiagnostics map`. `ast/node_builder.go:86-98`
+
+### What NodeBuilder requires from CompilerContext
+
+- `cx.DiagnosticEnv()` — for creating `diagnostics.Location` objects via `n.de()`. `ast/node_builder.go:100-108`
+- `cx.GetDefaultPackage()` — for `PackageID`. `ast/node_builder.go:122`
+- `cx.GetNextAnonymousTypeKey(packageID)` — for anonymous type names. `ast/node_builder.go:380-383`
+- `cx.GetNextAnonymousFunctionKey(packageID)` — for anonymous function names. `context/context.go:295-298`
+- `cx.SyntaxError(message, pos)` — for reporting syntax errors during AST build. `context/context.go:230-232`
+- `cx.NewPackageID(org, nameComps, version)` — for creating package IDs. `context/context.go:225-227`
+
+### What CompilerContext requires from CompilerEnvironment
+
+- `env.DiagnosticEnv()` — shared `*diagnostics.DiagnosticEnv`. `context/env.go:100-102`
+- `env.GetDefaultPackage()` — via `packageInterner`. `context/env.go:215-217`
+- `env.GetNextAnonymousTypeKey()` / `GetNextAnonymousFunctionKey()` — counter maps. `context/env.go:245-260`
+- `env.NewSymbolSpace()`, `NewModuleScope()`, `NewFunctionScope()`, `NewBlockScope()` — scope creation. `context/env.go:108-140`
+- `env.GetSymbol(ref)`, `SymbolName()`, `SymbolType()`, `SymbolLocation()`, `SymbolKind()` — symbol queries. `context/env.go:142-190`
+- `env.GetTypeEnv()` — `semtypes.Env`. `context/env.go:235-238`
+- `env.packageInterner` — `*model.PackageIDInterner` (shared, `DefaultPackageIDInterner`). `context/env.go:28`
+
+### Position handling in NodeBuilder
+
+- `getPosition(node)` — uses `node.TextRange()` (excludes leading trivia). `ast/node_builder.go:155-157`
+- `getRecoveryPosition(node)` — uses `node.TextRangeWithMinutiae()` (includes leading trivia, for bad nodes). `ast/node_builder.go:159-161`
+- `location(node, textRange)` — creates `diagnostics.NewLocation(de, fileName, start, end)`. `ast/node_builder.go:163-165`
+- `getPositionRange(startNode, endNode)` — span from start to end node. `ast/node_builder.go:167-170`
+- `getPositionWithoutMetadata(node)` — skips leading metadata child. `ast/node_builder.go:172-174`
+- All positions are byte-offset based, file-indexed via `DiagnosticEnv`.
+
 ## Red-node statement types (parser/tree/node_gen.go)
 
 - `tree.StatementNode = NonTerminalNode` — `explore-codebase/parser/tree/node_gen.go:346`

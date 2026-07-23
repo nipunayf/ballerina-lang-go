@@ -7,6 +7,7 @@ Read this first. Open only topic files matching your query + `dead-ends.md` (alw
 - [completion-providers.md](completion-providers.md) — per-kind providers: expression paths, callable/function snippets, fn params, record fields, snippets, postfix, flyimport.
 - [completion-item.md](completion-item.md) — `CompletionItem`/`CompletionRelevance` structure, relevance scoring, LSP conversion + sort/filter/dedup.
 - [syntax-tree-architecture.md](syntax-tree-architecture.md) — rowan red/green split (SyntaxNode/GreenNode), `parse` Salsa query, HIR layer (ItemTree) constructed from syntax via Salsa, source maps back to syntax, completion touching raw CST (token_at_offset, trivia).
+- [database-indexes.md](database-indexes.md) — precomputed FST indices (SymbolIndex, ImportMap) vs request-time semantic queries; flyimport path; prime_caches; snapshot model; transferable cautions for shared API decisions.
 - [dead-ends.md](dead-ends.md) — ALWAYS read: no staged/partial completion, no fine-grained cancellation, ExprScopes is a Salsa query.
 
 Maintenance: merge into topic headings, never ticket/date sections. Split files >~150 lines and update this index.

@@ -61,6 +61,48 @@ Keep entries summarized and pointer-dense — `path` + symbol, one line each.
 - `semanticItem(fact)` — converts `CompletionFact` to `CompletionItem`. `ls/ls/core/query/completion.go:190-205`
 - `filterDedupSort(items, prefix)` — deduplicates by label, sorts by rank then label. `ls/ls/core/query/completion.go:365-380`
 
+### classifyContext: purely red-node tree walking
+
+- `classifyContext` takes `*tree.ModulePart`, `offset int`, `text string` — no compiler objects. `completion_module.go:100`
+- Returns `(contextKind, importContext)` — `contextKind` is one of 5 values. `completion_module.go:91-98`
+- First checks `cursorInComment(text, offset)` — returns `contextUnsupported`. `completion_module.go:103-105`
+- Then checks `classifyImport(part, offset, text)` — walks `part.Imports()`, checks `rangeContains(imp, offset)`. `completion_module.go:106-108`
+- Then walks `part.Members()` — for each member, checks `rangeContains(m, offset)`. `completion_module.go:109-138`
+- For `*tree.FunctionDefinition`: checks `functionBodyBlock(fn)` then `cursorInBody(body, offset)`. `completion_module.go:112-124`
+- For `*tree.ModuleVariableDeclarationNode`: checks semicolon/equals token presence for recovery. `completion_module.go:125-133`
+- All position checks use `TextRange()` byte offsets. `completion_module.go:passim`
+- `classifyImport` sub-classifies into `importOrg`, `importModule`, `importAsAlias` — walks `imp.OrgName()`, `imp.ModuleName()`, `imp.Prefix()`. `completion_module.go:150-190`
+- `classifyAliasMember` scans left from cursor for `identifier.` pattern. `completion_module.go:200-230`
+- `importAlias(imp)` extracts alias, org, module name from import declaration. `completion_module.go:235-255`
+- `alreadyImportedModules(part)` builds `org/moduleName` set from imports. `completion_module.go:260-270`
+- `importInsertionOffset(part, text)` finds insertion point after last import. `completion_module.go:275-290`
+- `firstFreeAlias(part, moduleName, taken)` finds first unused alias suffix. `completion_module.go:295-310`
+- `buildImportEdit(part, org, moduleName, alias)` constructs additional edit for auto-import. `completion_module.go:315-340`
+- `modulePartItems(part, text, prefixStart, prefix)` builds snippet matrix. `completion_module.go:345-375`
+- `importModuleItems(catalog, org, filterPrefix, stripPrefix, part)` — catalog-backed module completion. `completion_module.go:380-410`
+- `importOrgItems(catalog, prefix)` — distinct org names from catalog. `completion_module.go:415-435`
+- `aliasMemberItems(exports, alias, prefix)` — imported alias's public exports. `completion_module.go:440-455`
+- `autoImportItems(catalog, alias, part, taken)` — unimported module candidates with additional edit. `completion_module.go:460-490`
+- `detectMemberAccess(part, offset, text, catalog)` — classifies `recv.<prefix>`, `recv?.<prefix>`, `recv-><prefix>`. `completion.go:395-435`
+- `completeMemberAccess(u, st, offset, ma)` — reads from generation-matched `MemberCompletionIndex`. `completion.go:440-475`
+- `completeFunctionBody(u, part, st, offset, text)` — main function-body path: scope + body catalog + semantic facts. `completion.go:280-340`
+- `completeModulePart(u, part, st, offset, text)` — snippet matrix + alias-member + member-access. `completion.go:240-260`
+- `completeImport(part, st, offset, text, ic)` — dispatches by import sub-kind. `completion.go:215-235`
+- `completeAliasMember(part, st, offset, text)` — alias-member or auto-import. `completion.go:265-275`
+- `importCatalog(fileKey)` — acquires generation-matched lease, returns `*projects.ImportCatalog`. `completion.go:350-370`
+
+### bodyPosition classification (completion_body.go)
+
+- `bodyPosition` enum — `bodyExpression` (0), `bodyStatementStart` (1). `completion_body.go:22-26`
+- `classifyBodyPosition(body, offset, text)` — classifies cursor as statement-start or expression. `completion_body.go:30-80`
+- `statementStartCompletions` — 19 entries: if/else/while/foreach/do/return/fail/panic/break/continue/lock/transaction/retry/match/fork/worker/var/final/type. `completion_body.go:35-55`
+- `expressionCompletions` — action/check/conditional/type-test/cast/literal/constructor catalog. `completion_body.go:60-80`
+- `bodyCatalogItems(position, inLoop, elseFollowOn)` — returns position-gated catalog. `completion_body.go:85-100`
+- `loopEncloses(body, offset)` — walks ancestor chain for enclosing loop. `completion_body.go:105-130`
+- `canFollowWithElse(body, offset)` — detects if cursor follows an if without else. `completion_body.go:135-160`
+- `collectScope(fn, body, offset)` — parameters + preceding locals, shadowing-aware. `completion_body.go:165-200`
+- `collectPrecedingLocals(statements, offset)` — walks statements, collects locals before cursor. `completion.go:240-290`
+
 ## LS-side: server adapter (ls/server)
 
 - `completionLeaseAdapter` — adapts `compile.CompilationService.Lease()` to `query.CompletionLeaser`. `ls/ls/server/completion.go:20-35`

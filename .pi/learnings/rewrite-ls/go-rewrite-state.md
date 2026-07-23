@@ -55,6 +55,35 @@ recorded around Phase B / tickets 08-09; items marked "Phase B" may be supersede
 
 - `sync.Once` ↔ Java `CompletableFuture` lazy-init; `sync.Map.LoadOrStore` ↔ `ConcurrentHashMap.computeIfAbsent`; `sync.WaitGroup` ↔ `CompletableFuture.allOf`; `sync.Mutex` ↔ `ReentrantLock`; `context.WithCancel` per key ↔ `CompletableFuture.cancel()`.
 
+## Completion architecture (ticket 33 era)
+
+### Cursor-context classifier (AST-only, no CST trivia dependency)
+
+- `classifyContext()` at `ls/core/query/completion_module.go:classifyContext` — walks `tree.ModulePart` members and imports; classifies into `contextFunctionBody`, `contextModulePart`, `contextImport`, `contextAliasMember`, or `contextUnsupported`. Purely AST-based: iterates `part.Members()` and `part.Imports()`, checks `rangeContains(m, offset)` for each member. No CST token/trivia dependency.
+- `classifyCompletion()` at `ls/core/query/completion.go:classifyCompletion` — further classifies function-body positions into `bodyStatementStart` vs `bodyExpression`. Uses `classifyBodyPosition()` which scans raw text left of cursor for last non-whitespace char — a text heuristic, not CST-based.
+- `cursorInComment()` at `ls/core/query/completion.go:cursorInComment` — text-based scanner tracking string/template literals and line/block comments. Does NOT use CST trivia. Acceptable limitation: `//` inside `${}` interpolation treated as part of template.
+- `classifyBodyPosition()` at `ls/core/query/completion_body.go:classifyBodyPosition` — scans left from cursor over whitespace to last non-whitespace char. `{;}` → statement-start; `=(,.+-*/%<>!&|?~^@"'\`` → expression; ident chars → expression; anything else → statement-start (conservative fallback).
+
+### Scope collection (AST-only)
+
+- `collectScope()` at `ls/core/query/completion_body.go:collectScope` — walks AST parameters + preceding local declarations via `tree.NodeList` iterators. No semantic model access. Shadowing: innermost-wins via `seen` map.
+- `collectLocalsScope()` at `ls/core/query/completion_body.go:collectLocalsScope` — recurses only into the nested block containing the cursor. Sibling branches (else vs if) are excluded.
+- `loopEncloses()` at `ls/core/query/completion_body.go:loopEncloses` — walks statement chain via `descendStatementChain()`, returns true at first while/foreach, false at first fork (scope barrier).
+
+### Semantic facts via non-blocking lease
+
+- `CompletionLease` interface at `ls/core/query/completion.go:CompletionLease` — provides generation-matched, non-blocking access to compiler-precomputed indices: `CompletionIndex`, `ExpectedTypeIndex`, `ImportCatalog`, `MemberCompletionIndex`, `InvocationCompletionIndex`. Query layer never waits for compilation.
+- `completeFunctionBody()` at `ls/core/query/completion.go:completeFunctionBody` — acquires lease via `s.compiler.Lease(root, gen)`, reads facts from `lease.Index()`, boosts expected-type via `lease.ExpectedTypeIndex()`, enriches callable snippets and invocation tiers via `lease.InvocationCompletionIndex()`. Falls back to syntax/static only when no matching lease.
+- `completeMemberAccess()` at `ls/core/query/completion.go:completeMemberAccess` — reads `lease.MemberCompletionIndex()` for the exact source access slot (kind + dotOffset). No matching slot → empty result.
+- `importCatalog()` at `ls/core/query/completion.go:importCatalog` — acquires lease for import module/alias-export catalog. Nil catalog → fall back to syntax/static only.
+
+### Ticket 33: scoped environment handle for AST-only completion
+
+- The query layer currently accesses compiler indices through `CompletionLease` (5 separate index pointers). A "scoped environment handle" would be a narrower interface providing only AST-level context (syntax tree, scope chain, cursor position) without requiring compiler indices.
+- Current AST-only paths already exist: `classifyContext`, `classifyCompletion`, `collectScope`, `bodyCatalogItems`, `modulePartItems` — all work without any lease. The handle would formalize this boundary.
+- The `Service` struct at `ls/core/query/query.go:Service` holds `projects *workspace.ProjectService` and `compiler CompletionLeaser`. A scoped handle would extract the `projects`-derived AST context (document, module, syntax tree) into a standalone value that `Completion()` methods can use without touching `s.compiler`.
+- Key invariant: the handle must be generation-scoped (matched to the current document text) to avoid stale AST reuse after edits. The `Snapshot.Generation` field at `ls/core/workspace/workspace.go` provides this.
+
 ## Choices recorded as requiring HIL (ticket 09 era — check what has since landed)
 
 1. Debounce strategy (single layer, per-key scheduling, cancellation model).
