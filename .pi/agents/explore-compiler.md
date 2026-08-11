@@ -4,7 +4,7 @@ description: Explore this repo's compiler packages (ast, model, semantics, proje
 tools: read, bash, edit, write, grep, find, ls
 auto-exit: true
 thinking: medium
-model: ollama-cloud/deepseek-v4-flash
+model: ollama-cloud/deepseek-v4-flash:0731
 skills: explore-agent-protocol
 spawning: false
 ---
@@ -28,9 +28,9 @@ Current-repo paths are correct here — that's this directory's subject. Boundar
 
 ## Learnings and output
 
-Load `explore-agent-protocol` for the read/write/report mechanics. Your
-learnings directory is
-`/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/compiler/`
-— it has a `gaps.md`, so track new gaps there per the protocol. In your
-output, explicitly call out any gap between what the feature needs and what
-the compiler currently exposes.
+Load `explore-agent-protocol` for the vault read/write/report mechanics.
+Your source is `compiler`: read `docs/moc/compiler.md`, write notes under
+`docs/notes/compiler/`, and route gaps to `docs/logs/compiler-gaps.md`
+(absolute vault path: `/Users/wso2/projects/ballerina/ballerina-go/docs/`).
+In your output, explicitly call out any gap between what the feature needs
+and what the compiler currently exposes.

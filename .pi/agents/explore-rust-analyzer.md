@@ -29,10 +29,12 @@ Every claim here must be about rust-analyzer's own code, true independent of the
 
 ## Learnings and output
 
-Load `explore-agent-protocol` for the read/write/report mechanics. Your
-learnings directory is
-`/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/rust-analyzer/`
-(absolute path — it lives outside this checkout). In your output, note where
-rust-analyzer's approach is idiomatic Rust in a way that doesn't translate
-directly, and where it's protocol-level plumbing that generalizes to any LSP
-server implementation.
+Load `explore-agent-protocol` for the vault read/write/report mechanics.
+Your source is `rust-analyzer`: read `docs/moc/rust-analyzer.md`, write
+notes under `docs/notes/rust-analyzer/`, and route dead-ends/gaps to
+`docs/logs/rust-analyzer-dead-ends.md` / `docs/logs/rust-analyzer-gaps.md`
+(absolute vault path: `/Users/wso2/projects/ballerina/ballerina-go/docs/` —
+it lives outside this checkout). In your output, note where rust-analyzer's
+approach is idiomatic Rust in a way that doesn't translate directly, and
+where it's protocol-level plumbing that generalizes to any LSP server
+implementation.

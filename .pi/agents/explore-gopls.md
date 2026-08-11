@@ -29,9 +29,11 @@ Every claim here must be about gopls's own code, true independent of the Go Ball
 
 ## Learnings and output
 
-Load `explore-agent-protocol` for the read/write/report mechanics. Your
-learnings directory is
-`/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/gopls/`
-(absolute path — it lives outside this checkout). In your output, note where
-gopls's approach is Go-idiomatic in a way worth mirroring, and where it's
-gopls-specific plumbing that doesn't generalize.
+Load `explore-agent-protocol` for the vault read/write/report mechanics.
+Your source is `gopls`: read `docs/moc/gopls.md`, write notes under
+`docs/notes/gopls/`, and route dead-ends/gaps to
+`docs/logs/gopls-dead-ends.md` / `docs/logs/gopls-gaps.md` (absolute vault
+path: `/Users/wso2/projects/ballerina/ballerina-go/docs/` — it lives outside
+this checkout). In your output, note where gopls's approach is Go-idiomatic
+in a way worth mirroring, and where it's gopls-specific plumbing that
+doesn't generalize.

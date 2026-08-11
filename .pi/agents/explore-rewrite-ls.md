@@ -29,7 +29,9 @@ This directory is deliberately comparative (Java LS + Go rewrite state), so curr
 
 ## Learnings and output
 
-Load `explore-agent-protocol` for the read/write/report mechanics. Your
-learnings directory is
-`/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/rewrite-ls/`
-(absolute path — it lives outside this checkout).
+Load `explore-agent-protocol` for the vault read/write/report mechanics.
+Your source is `rewrite-ls`: read `docs/moc/rewrite-ls.md`, write notes
+under `docs/notes/rewrite-ls/`, and route dead-ends/gaps to
+`docs/logs/rewrite-ls-dead-ends.md` / `docs/logs/rewrite-ls-gaps.md`
+(absolute vault path: `/Users/wso2/projects/ballerina/ballerina-go/docs/` —
+it lives outside this checkout).

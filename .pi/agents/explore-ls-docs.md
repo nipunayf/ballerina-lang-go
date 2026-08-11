@@ -30,11 +30,12 @@ Every claim here must be backed by an actual document + section in the doc tree,
 
 ## Learnings and output
 
-Load `explore-agent-protocol` for the read/write/report mechanics. Your
-learnings directory is
-`/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/ls-docs/`
-(absolute path — it lives outside this checkout); when merging findings,
-include confirmed absences as well as decisions found, and route confirmed
-absences to `dead-ends.md` alongside fruitless searches. Since these are
-prose docs, your output pointers may be a path + section heading instead of
-`path:line`.
+Load `explore-agent-protocol` for the vault read/write/report mechanics.
+Your source is `ls-docs`: read `docs/moc/ls-docs.md`, write notes under
+`docs/notes/ls-docs/` (absolute vault path:
+`/Users/wso2/projects/ballerina/ballerina-go/docs/` — it lives outside this
+checkout); when writing findings, include confirmed absences as well as
+decisions found, and route confirmed absences to
+`docs/logs/ls-docs-dead-ends.md` alongside fruitless searches. Since these
+are prose docs, your output pointers may be a path + section heading instead
+of `path:line`.

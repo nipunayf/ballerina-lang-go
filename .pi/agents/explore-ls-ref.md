@@ -29,10 +29,11 @@ Every claim here must cite code that actually exists in the ls-ref checkout. Bec
 
 ## Learnings and output
 
-Load `explore-agent-protocol` for the read/write/report mechanics. Your
-learnings directory is
-`/Users/wso2/projects/ballerina/ballerina-go/ballerina-lang-go/ls/.pi/learnings/ls-ref/`
-(absolute path — it lives outside this checkout); `unsorted-facts.md` there
-is unverified, see its header. In your output, flag explicitly which parts
-are prototype-quality shortcuts vs. production-ready patterns worth porting
-directly.
+Load `explore-agent-protocol` for the vault read/write/report mechanics.
+Your source is `ls-ref`: read `docs/moc/ls-ref.md`, write notes under
+`docs/notes/ls-ref/`, and route dead-ends/gaps to
+`docs/logs/ls-ref-dead-ends.md` / `docs/logs/ls-ref-gaps.md` (absolute vault
+path: `/Users/wso2/projects/ballerina/ballerina-go/docs/` — it lives outside
+this checkout); `docs/logs/ls-ref-unsorted-facts.md` there is unverified, see
+its header. In your output, flag explicitly which parts are prototype-quality
+shortcuts vs. production-ready patterns worth porting directly.
