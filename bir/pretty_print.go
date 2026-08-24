@@ -21,9 +21,9 @@ import (
 	"sort"
 	"strings"
 
-	"ballerina-lang-go/model"
-	"ballerina-lang-go/semtypes"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/model"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
 type PrettyPrinter struct {
@@ -93,31 +93,39 @@ func (p *PrettyPrinter) Print(tyCtx semtypes.Context, node BIRPackage) string {
 	return p.sb.String()
 }
 
-func (p *PrettyPrinter) PrintFunction(function BIRFunction) {
-	p.write(function.Name.Value())
-	p.write("(")
-	paramStart := 1
-	if len(function.LocalVars) > 1 && function.LocalVars[1].GetName() == "self" {
-		paramStart = 2
+// printFunctionParams prints the parameter list of function. Native dependently
+// typed functions carry no local variables because their signature is only known
+// at each call site, so there is nothing to print for them.
+func (p *PrettyPrinter) printFunctionParams(function BIRFunction) {
+	paramStart := function.ParamLocalVarOffset()
+	if len(function.LocalVars) <= paramStart {
+		return
 	}
 	for i, v := range function.LocalVars[paramStart:] {
-		if i < len(function.RequiredParams) {
-			if i > 0 {
-				p.write(",")
-			}
-			p.write(p.PrintSemType(v.Type))
-		} else {
+		if i >= len(function.RequiredParams) {
 			break
 		}
+		if i > 0 {
+			p.write(",")
+		}
+		p.printAnnotations(function.RequiredParams[i].Annotations)
+		p.write(p.PrintSemType(v.Type))
 	}
 	if function.RestParams != nil {
 		variableIndex := paramStart + len(function.RequiredParams)
-		if variableIndex != 1 {
+		if variableIndex != paramStart {
 			p.write(",")
 		}
+		p.printAnnotations(function.RestParams.Annotations)
 		p.write(p.PrintSemType(function.LocalVars[variableIndex].Type))
 		p.write("...")
 	}
+}
+
+func (p *PrettyPrinter) PrintFunction(function BIRFunction) {
+	p.write(function.Name.Value())
+	p.write("(")
+	p.printFunctionParams(function)
 	p.write(")")
 	if function.ReturnVariable != nil && !semtypes.IsZero(function.ReturnVariable.Type) {
 		p.write(" -> ")
@@ -143,8 +151,23 @@ func (p *PrettyPrinter) PrintFunction(function BIRFunction) {
 	p.write("}")
 }
 
+func (p *PrettyPrinter) printAnnotations(annotations values.AnnotationValues) {
+	keys := make([]string, 0, len(annotations))
+	for key := range annotations {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		p.write("@")
+		p.write(key)
+		p.write("(")
+		p.write(formatConstantValue(annotations[key]))
+		p.write(") ")
+	}
+}
+
 func (p *PrettyPrinter) PrintBasicBlock(basicBlock BIRBasicBlock) {
-	p.writeLine(basicBlock.Id.Value() + " {")
+	p.writeLine(basicBlock.ID.Value() + " {")
 	p.increaseIndent()
 	for _, instruction := range basicBlock.Instructions {
 		p.writeLine(p.PrintInstruction(instruction))
@@ -303,11 +326,11 @@ func (p *PrettyPrinter) PrintNewError(e *NewError) string {
 
 func (p *PrettyPrinter) PrintFieldAccess(access *FieldAccess) string {
 	switch access.Kind {
-	case INSTRUCTION_KIND_MAP_STORE, INSTRUCTION_KIND_ARRAY_STORE, INSTRUCTION_KIND_OBJECT_STORE:
+	case InstructionKindMapStore, InstructionKindArrayStore, InstructionKindObjectStore:
 		return fmt.Sprintf("%s[%s] = %s;", p.PrintOperand(*access.LhsOp), p.PrintOperand(*access.KeyOp), p.PrintOperand(*access.RhsOp))
-	case INSTRUCTION_KIND_MAP_LOAD, INSTRUCTION_KIND_ARRAY_LOAD, INSTRUCTION_KIND_OBJECT_LOAD:
+	case InstructionKindMapLoad, InstructionKindArrayLoad, InstructionKindObjectLoad:
 		return fmt.Sprintf("%s = %s[%s];", p.PrintOperand(*access.LhsOp), p.PrintOperand(*access.RhsOp), p.PrintOperand(*access.KeyOp))
-	case INSTRUCTION_KIND_ARRAY_FILLING_LOAD, INSTRUCTION_KIND_MAP_FILLING_LOAD:
+	case InstructionKindArrayFillingLoad, InstructionKindMapFillingLoad:
 		return fmt.Sprintf("%s = %s[%s] (fill);", p.PrintOperand(*access.LhsOp), p.PrintOperand(*access.RhsOp), p.PrintOperand(*access.KeyOp))
 	default:
 		panic(fmt.Sprintf("unknown field access kind: %d", access.Kind))
@@ -331,6 +354,7 @@ func (p *PrettyPrinter) PrintStreamClose(n *StreamClose) string {
 }
 
 func (p *PrettyPrinter) PrintClassDef(classDef BIRClassDef) {
+	p.printAnnotations(classDef.Annotations)
 	p.write("class ")
 	p.write(classDef.Name.Value())
 	p.write(" {\n")
@@ -404,19 +428,19 @@ func (p *PrettyPrinter) PrintPanic(pa *Panic) string {
 }
 
 func (p *PrettyPrinter) PrintLockStart(l *LockStart) string {
-	return fmt.Sprintf("lock-start %q GOTO %s;", l.LockKey, l.ThenBB.Id.Value())
+	return fmt.Sprintf("lock-start %q GOTO %s;", l.LockKey, l.ThenBB.ID.Value())
 }
 
 func (p *PrettyPrinter) PrintLockEnd(l *LockEnd) string {
-	return fmt.Sprintf("lock-end %q GOTO %s;", l.LockKey, l.ThenBB.Id.Value())
+	return fmt.Sprintf("lock-end %q GOTO %s;", l.LockKey, l.ThenBB.ID.Value())
 }
 
 func (p *PrettyPrinter) PrintBranch(b *Branch) string {
-	return fmt.Sprintf("%s ? %s : %s;", p.PrintOperand(*b.Op), b.TrueBB.Id.Value(), b.FalseBB.Id.Value())
+	return fmt.Sprintf("%s ? %s : %s;", p.PrintOperand(*b.Op), b.TrueBB.ID.Value(), b.FalseBB.ID.Value())
 }
 
 func (p *PrettyPrinter) PrintGoto(g *Goto) string {
-	return fmt.Sprintf("GOTO %s;", g.ThenBB.Id.Value())
+	return fmt.Sprintf("GOTO %s;", g.ThenBB.ID.Value())
 }
 
 func (p *PrettyPrinter) PrintResourceFunctionCall(call *ResourceFunctionCall) string {
@@ -434,7 +458,7 @@ func (p *PrettyPrinter) PrintResourceFunctionCall(call *ResourceFunctionCall) st
 		}
 		args.WriteString(p.PrintOperand(arg))
 	}
-	return fmt.Sprintf("%s = %s->[%s].%s(%s) -> %s;", p.PrintOperand(*call.LhsOp), p.PrintOperand(call.Receiver), segs.String(), call.MethodName, args.String(), call.ThenBB.Id.Value())
+	return fmt.Sprintf("%s = %s->[%s].%s(%s) -> %s;", p.PrintOperand(*call.LhsOp), p.PrintOperand(call.Receiver), segs.String(), call.MethodName, args.String(), call.ThenBB.ID.Value())
 }
 
 func (p *PrettyPrinter) PrintCall(call *Call) string {
@@ -445,7 +469,7 @@ func (p *PrettyPrinter) PrintCall(call *Call) string {
 		}
 		args.WriteString(p.PrintOperand(arg))
 	}
-	return fmt.Sprintf("%s = %s(%s) -> %s;", p.PrintOperand(*call.LhsOp), call.Name.Value(), args.String(), call.ThenBB.Id.Value())
+	return fmt.Sprintf("%s = %s(%s) -> %s;", p.PrintOperand(*call.LhsOp), call.Name.Value(), args.String(), call.ThenBB.ID.Value())
 }
 
 func (p *PrettyPrinter) PrintOperand(operand BIROperand) string {
@@ -470,6 +494,9 @@ func formatConstantValue(v any) string {
 	case *values.List, *values.Map, *values.Error, *values.Function, *values.Object, *values.TypeDesc:
 		return values.String(v, map[uintptr]bool{})
 	}
+	if ref, ok := v.(*values.RuntimeAnnotationValueRef); ok {
+		return fmt.Sprintf("runtime-ref(%s/%s:%s)", ref.Organization, ref.Module, ref.GlobalName)
+	}
 	return fmt.Sprintf("%v", v)
 }
 
@@ -483,37 +510,37 @@ func (p *PrettyPrinter) PrintBinaryOp(op *BinaryOp) string {
 
 func (p *PrettyPrinter) PrintInstructionKind(kind InstructionKind) string {
 	switch kind {
-	case INSTRUCTION_KIND_ADD:
+	case InstructionKindAdd:
 		return "+"
-	case INSTRUCTION_KIND_SUB:
+	case InstructionKindSub:
 		return "-"
-	case INSTRUCTION_KIND_MUL:
+	case InstructionKindMul:
 		return "*"
-	case INSTRUCTION_KIND_DIV:
+	case InstructionKindDiv:
 		return "/"
-	case INSTRUCTION_KIND_MOD:
+	case InstructionKindMod:
 		return "%"
-	case INSTRUCTION_KIND_AND:
+	case InstructionKindAnd:
 		return "&&"
-	case INSTRUCTION_KIND_OR:
+	case InstructionKindOr:
 		return "||"
-	case INSTRUCTION_KIND_LESS_THAN:
+	case InstructionKindLessThan:
 		return "<"
-	case INSTRUCTION_KIND_LESS_EQUAL:
+	case InstructionKindLessEqual:
 		return "<="
-	case INSTRUCTION_KIND_GREATER_THAN:
+	case InstructionKindGreaterThan:
 		return ">"
-	case INSTRUCTION_KIND_GREATER_EQUAL:
+	case InstructionKindGreaterEqual:
 		return ">="
-	case INSTRUCTION_KIND_EQUAL:
+	case InstructionKindEqual:
 		return "=="
-	case INSTRUCTION_KIND_NOT_EQUAL:
+	case InstructionKindNotEqual:
 		return "!="
-	case INSTRUCTION_KIND_NOT:
+	case InstructionKindNot:
 		return "!"
-	case INSTRUCTION_KIND_BITWISE_COMPLEMENT:
+	case InstructionKindBitwiseComplement:
 		return "~"
-	case INSTRUCTION_KIND_ANNOT_ACCESS:
+	case InstructionKindAnnotAccess:
 		return ".@"
 	}
 	return "unknown"

@@ -38,14 +38,14 @@ import (
 	"testing"
 	"time"
 
-	"ballerina-lang-go/bir"
-	"ballerina-lang-go/platform/pal"
-	"ballerina-lang-go/platform/palnative"
-	"ballerina-lang-go/projects"
-	"ballerina-lang-go/runtime"
-	"ballerina-lang-go/runtime/extern"
-	"ballerina-lang-go/test_util"
-	"ballerina-lang-go/tools/diagnostics"
+	"github.com/ballerina-nutcracker/ballerina/bir"
+	"github.com/ballerina-nutcracker/ballerina/platform/pal"
+	"github.com/ballerina-nutcracker/ballerina/platform/palnative"
+	"github.com/ballerina-nutcracker/ballerina/projects"
+	"github.com/ballerina-nutcracker/ballerina/runtime"
+	"github.com/ballerina-nutcracker/ballerina/runtime/extern"
+	"github.com/ballerina-nutcracker/ballerina/test_util"
+	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
 )
 
 // TestCase / TestKind / TestSuffix and the suffix constants live in test_util
@@ -267,6 +267,22 @@ func (p *testPal) Platform() pal.Platform {
 				_, err = f.Write(data)
 				return err
 			},
+			OpenReadable: func(path string) (io.ReadCloser, error) {
+				return os.Open(normalizePath(path))
+			},
+			OpenWritable: func(path string, appendMode bool) (io.WriteCloser, error) {
+				path = normalizePath(path)
+				if err := createParentDirs(path); err != nil {
+					return nil, err
+				}
+				flag := os.O_CREATE | os.O_WRONLY
+				if appendMode {
+					flag |= os.O_APPEND
+				} else {
+					flag |= os.O_TRUNC
+				}
+				return os.OpenFile(path, flag, 0o644)
+			},
 		},
 		OS: pal.OS{
 			GetEnv:      os.Getenv,
@@ -440,7 +456,6 @@ func Run(t testing.TB, tc test_util.TestCase, pal TestPal, externs []ExternRegis
 	if len(birPkgs) == 0 {
 		t.Fatalf("compilation succeeded but produced no BIR packages for %s", tc.Name)
 	}
-
 	rt := runtime.NewRuntime(pal.Platform(), tyEnv)
 	for _, e := range externs {
 		runtime.RegisterExternFunction(rt, e.Org, e.Module, e.FuncName, e.Impl)

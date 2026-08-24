@@ -17,11 +17,11 @@
 package exec
 
 import (
-	"ballerina-lang-go/bir"
-	"ballerina-lang-go/runtime/extern"
-	"ballerina-lang-go/runtime/internal/modules"
-	"ballerina-lang-go/semtypes"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/bir"
+	"github.com/ballerina-nutcracker/ballerina/runtime/extern"
+	"github.com/ballerina-nutcracker/ballerina/runtime/internal/modules"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
 func execBranch(ctx *extern.Context, branchTerm *bir.Branch, frame *Frame) *bir.BIRBasicBlock {
@@ -50,13 +50,13 @@ func executeCall(ctx *extern.Context, callInfo *bir.Call, args []values.BalValue
 	if callInfo.CachedNativeFunc != nil {
 		result, err := callInfo.CachedNativeFunc(ctx, args)
 		if err != nil {
-			panic(err)
+			panicWithExternError(err)
 		}
 		return result
 	}
 	result, err := lookupAndExecute(ctx, callInfo, args, callInfo.FunctionLookupKey)
 	if err != nil {
-		panic(err)
+		panicWithExternError(err)
 	}
 	return result
 }
@@ -77,7 +77,7 @@ func dispatchMethodCall(ctx *extern.Context, callInfo *bir.Call, args []values.B
 		if callInfo.CachedNativeFunc != nil {
 			result, err := callInfo.CachedNativeFunc(ctx, args)
 			if err != nil {
-				panic(err)
+				panicWithExternError(err)
 			}
 			return result
 		}
@@ -88,7 +88,7 @@ func dispatchMethodCall(ctx *extern.Context, callInfo *bir.Call, args []values.B
 	callInfo.CachedMethodLookupKey = lookupKey
 	result, err := lookupAndExecute(ctx, callInfo, args, lookupKey)
 	if err != nil {
-		panic(err)
+		panicWithExternError(err)
 	}
 	return result
 }
@@ -127,7 +127,7 @@ func execResourceCall(ctx *extern.Context, instr *bir.ResourceFunctionCall, fram
 	argVals := extractArgs(ctx, instr.Args, frame)
 	result, err := Invoke(ctx, impl, argVals)
 	if err != nil {
-		panic(err)
+		panicWithExternError(err)
 	}
 	if instr.LhsOp != nil {
 		setOperandValue(ctx, instr.LhsOp, frame, result)
@@ -158,7 +158,7 @@ func resourcePathMatches(ctx *extern.Context, entry *values.ResourceEntry, shape
 	if len(shapes) < requiredLen {
 		return false
 	}
-	tyCx := ctx.TypeCtx
+	tyCx := ctx.TypeCtx()
 	for i := range requiredLen {
 		if !semtypes.IsSubtype(tyCx, shapes[i], entry.PathSegments[i].Ty) {
 			return false
@@ -189,10 +189,11 @@ func buildResourceCallArgs(ctx *extern.Context, receiver *values.Object, match *
 	}
 	if !semtypes.IsNever(match.RestSegmentTy) {
 		restVals := pathVals[k:]
-		// FIXME: https://github.com/ballerina-platform/ballerina-lang-go/issues/471
+		// FIXME: https://github.com/ballerina-nutcracker/ballerina/issues/471
 		listDefn := semtypes.NewListDefinition()
-		restListTy := listDefn.DefineListTypeWrapped(ctx.Env.TypeEnv, []semtypes.SemType{}, 0, match.RestSegmentTy, semtypes.CellMutability_CELL_MUT_NONE)
-		atomic := semtypes.ToListAtomicType(ctx.TypeCtx, restListTy)
+		restListTy := listDefn.Define(ctx.TypeEnv(), nil, semtypes.ListRest(match.RestSegmentTy),
+			semtypes.ListMutability(semtypes.CellMutabilityNone))
+		atomic := semtypes.ToListAtomicType(ctx.TypeEnv(), restListTy)
 		if atomic == nil {
 			panic("rest segment type has no list atomic representation")
 		}
@@ -219,7 +220,7 @@ func execFpCall(ctx *extern.Context, callInfo *bir.Call, frame *Frame) *bir.BIRB
 		var err error
 		result, err = builtin(ctx, args)
 		if err != nil {
-			panic(err)
+			panicWithExternError(err)
 		}
 	} else if fn := reg.GetBIRFunction(lookupKey); fn != nil {
 		result = executeFunction(ctx, fn, args, parentFrame)
@@ -227,7 +228,7 @@ func execFpCall(ctx *extern.Context, callInfo *bir.Call, frame *Frame) *bir.BIRB
 		var err error
 		result, err = externFn.Impl(ctx, args)
 		if err != nil {
-			panic(err)
+			panicWithExternError(err)
 		}
 	} else {
 		panic("function not found: " + callInfo.Name.Value())

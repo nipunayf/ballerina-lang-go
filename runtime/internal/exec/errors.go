@@ -21,14 +21,20 @@ import (
 	"path/filepath"
 	"strings"
 
-	"ballerina-lang-go/bir"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/bir"
+	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
 func getFormattedError(cs *callStack, r any) error {
 	message := panicMessage(r)
 	stack := formatCallStack(cs)
 	return fmt.Errorf("%s", formatRuntimePanic(message, stack))
+}
+
+// panicWithExternError raises a native-call failure as a *values.Error so
+// that `trap` can recover it like any other Ballerina panic.
+func panicWithExternError(err error) {
+	panic(values.NewErrorWithMessage(err.Error()))
 }
 
 func panicMessage(r any) string {

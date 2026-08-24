@@ -22,22 +22,24 @@ import (
 	"math"
 	"sort"
 
-	"ballerina-lang-go/bir"
-	"ballerina-lang-go/decimal"
-	"ballerina-lang-go/model"
-	"ballerina-lang-go/semtypes"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/bir"
+	"github.com/ballerina-nutcracker/ballerina/decimal"
+	"github.com/ballerina-nutcracker/ballerina/model"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
 const (
 	BIR_MAGIC   = "\xba\x10\xc0\xde"
-	BIR_VERSION = 82
+	BIR_VERSION = 84
 )
 
 type birWriter struct {
-	cp  *ConstantPool
-	tp  *semtypes.TypePool
-	env semtypes.Env
+	cp           *ConstantPool
+	tp           *semtypes.TypePool
+	env          semtypes.Env
+	localDclIDs  map[*bir.BIRLocalVariableDcl]int32
+	localDclList []*bir.BIRLocalVariableDcl
 }
 
 func Marshal(tyEnv semtypes.Env, pkg *bir.BIRPackage) ([]byte, error) {
@@ -100,7 +102,7 @@ func (bw *birWriter) writeGlobalVars(buf *bytes.Buffer, pkg *bir.BIRPackage) {
 	bw.writeLength(buf, len(pkg.GlobalVars))
 	for _, gv := range pkg.GlobalVars {
 		bw.writePosition(buf, gv.Pos)
-		bw.writeKind(buf, bir.VAR_KIND_GLOBAL)
+		bw.writeKind(buf, bir.VarKindGlobal)
 		name := gv.GetName()
 		bw.writeStringCPEntry(buf, name.Value())
 		bw.writeFlags(buf, gv.Flags)
@@ -118,6 +120,7 @@ func (bw *birWriter) writeClassDefs(buf *bytes.Buffer, pkg *bir.BIRPackage) {
 func (bw *birWriter) writeClassDef(buf *bytes.Buffer, classDef *bir.BIRClassDef) {
 	bw.writeStringCPEntry(buf, classDef.Name.Value())
 	bw.writeStringCPEntry(buf, classDef.LookupKey)
+	bw.writeAnnotationValues(buf, classDef.Annotations)
 	bw.writeLength(buf, len(classDef.Fields))
 	for _, field := range classDef.Fields {
 		bw.writeStringCPEntry(buf, field.Name)
@@ -171,6 +174,9 @@ func (bw *birWriter) writeFunctions(buf *bytes.Buffer, pkg *bir.BIRPackage) {
 }
 
 func (bw *birWriter) writeFunction(buf *bytes.Buffer, fn *bir.BIRFunction) {
+	bw.localDclIDs = make(map[*bir.BIRLocalVariableDcl]int32)
+	bw.localDclList = nil
+
 	bw.writePosition(buf, fn.Pos)
 	bw.writeStringCPEntry(buf, fn.Name.Value())
 	bw.writeStringCPEntry(buf, fn.OriginalName.Value())
@@ -181,15 +187,20 @@ func (bw *birWriter) writeFunction(buf *bytes.Buffer, fn *bir.BIRFunction) {
 	for _, requiredParam := range fn.RequiredParams {
 		bw.writeStringCPEntry(buf, requiredParam.Name.Value())
 		bw.writeFlags(buf, requiredParam.Flags)
+		bw.writeAnnotationValues(buf, requiredParam.Annotations)
 	}
 	write(buf, fn.RestParams != nil)
+	if fn.RestParams != nil {
+		bw.writeFlags(buf, fn.RestParams.Flags)
+		bw.writeAnnotationValues(buf, fn.RestParams.Annotations)
+	}
 
 	birbuf := &bytes.Buffer{}
 	bw.writeLength(birbuf, fn.ArgsCount)
 
 	write(birbuf, fn.ReturnVariable != nil)
 	if fn.ReturnVariable != nil {
-		bw.writeKind(birbuf, bir.VAR_KIND_RETURN)
+		bw.writeKind(birbuf, bir.VarKindReturn)
 		bw.writeType(birbuf, fn.ReturnVariable.GetType())
 		retName := fn.ReturnVariable.GetName()
 		bw.writeStringCPEntry(birbuf, retName.Value())
@@ -200,35 +211,47 @@ func (bw *birWriter) writeFunction(buf *bytes.Buffer, fn *bir.BIRFunction) {
 		bw.writeLocalVar(birbuf, &localVar)
 	}
 
-	bw.writeLength(birbuf, len(fn.BasicBlocks))
+	codebuf := &bytes.Buffer{}
+	bw.writeLength(codebuf, len(fn.BasicBlocks))
 	for _, bb := range fn.BasicBlocks {
-		bw.writeBasicBlock(birbuf, &bb)
+		bw.writeBasicBlock(codebuf, &bb)
 	}
 
-	bw.writeLength(birbuf, len(fn.ErrorTable))
+	bw.writeLength(codebuf, len(fn.ErrorTable))
 	for _, entry := range fn.ErrorTable {
-		bw.writeStringCPEntry(birbuf, fmt.Sprintf("bb%d", entry.Start))
-		bw.writeStringCPEntry(birbuf, fmt.Sprintf("bb%d", entry.End))
-		bw.writeStringCPEntry(birbuf, fmt.Sprintf("bb%d", entry.Target))
-		bw.writeOperand(birbuf, entry.ErrorOp)
+		bw.writeStringCPEntry(codebuf, fmt.Sprintf("bb%d", entry.Start))
+		bw.writeStringCPEntry(codebuf, fmt.Sprintf("bb%d", entry.End))
+		bw.writeStringCPEntry(codebuf, fmt.Sprintf("bb%d", entry.Target))
+		bw.writeOperand(codebuf, entry.ErrorOp)
+	}
+
+	bw.writeLength(birbuf, len(bw.localDclList))
+	for _, dcl := range bw.localDclList {
+		name := dcl.GetName()
+		bw.writeStringCPEntry(birbuf, name.Value())
+		bw.writeType(birbuf, dcl.GetType())
+	}
+	_, err := birbuf.Write(codebuf.Bytes())
+	if err != nil {
+		panic(fmt.Sprintf("writing function code bytes: %v", err))
 	}
 
 	bw.writeBufferLength(buf, birbuf)
-	_, err := buf.Write(birbuf.Bytes())
+	_, err = buf.Write(birbuf.Bytes())
 	if err != nil {
 		panic(fmt.Sprintf("writing function body bytes: %v", err))
 	}
 }
 
 func (bw *birWriter) writeLocalVar(buf *bytes.Buffer, localVar *bir.BIRLocalVariableDcl) {
-	bw.writeKind(buf, bir.VAR_KIND_LOCAL)
+	bw.writeKind(buf, bir.VarKindLocal)
 	bw.writeType(buf, localVar.GetType())
 	name := localVar.GetName()
 	bw.writeStringCPEntry(buf, name.Value())
 }
 
 func (bw *birWriter) writeBasicBlock(buf *bytes.Buffer, bb *bir.BIRBasicBlock) {
-	bw.writeStringCPEntry(buf, bb.Id.Value())
+	bw.writeStringCPEntry(buf, bb.ID.Value())
 	bw.writeLength(buf, len(bb.Instructions))
 
 	for _, instr := range bb.Instructions {
@@ -399,11 +422,11 @@ func (bw *birWriter) writeInstruction(buf *bytes.Buffer, instr bir.BIRInstructio
 func (bw *birWriter) writeTerminator(buf *bytes.Buffer, term bir.BIRTerminator) {
 	switch term := term.(type) {
 	case *bir.Goto:
-		bw.writeStringCPEntry(buf, term.ThenBB.Id.Value())
+		bw.writeStringCPEntry(buf, term.ThenBB.ID.Value())
 	case *bir.Branch:
 		bw.writeOperand(buf, term.Op)
-		bw.writeStringCPEntry(buf, term.TrueBB.Id.Value())
-		bw.writeStringCPEntry(buf, term.FalseBB.Id.Value())
+		bw.writeStringCPEntry(buf, term.TrueBB.ID.Value())
+		bw.writeStringCPEntry(buf, term.FalseBB.ID.Value())
 	case *bir.Call:
 		write(buf, term.IsMethodCall)
 		bw.writePackageCPEntry(buf, term.CalleePkg)
@@ -422,9 +445,9 @@ func (bw *birWriter) writeTerminator(buf *bytes.Buffer, term bir.BIRTerminator) 
 			write(buf, uint8(0))
 		}
 
-		bw.writeStringCPEntry(buf, term.ThenBB.Id.Value())
+		bw.writeStringCPEntry(buf, term.ThenBB.ID.Value())
 
-		if term.Kind == bir.INSTRUCTION_KIND_FP_CALL {
+		if term.Kind == bir.InstructionKindFPCall {
 			bw.writeOperand(buf, term.FpOperand)
 		}
 	case *bir.Return:
@@ -432,10 +455,10 @@ func (bw *birWriter) writeTerminator(buf *bytes.Buffer, term bir.BIRTerminator) 
 		bw.writeOperand(buf, term.ErrorOp)
 	case *bir.LockStart:
 		bw.writeStringCPEntry(buf, term.LockKey)
-		bw.writeStringCPEntry(buf, term.ThenBB.Id.Value())
+		bw.writeStringCPEntry(buf, term.ThenBB.ID.Value())
 	case *bir.LockEnd:
 		bw.writeStringCPEntry(buf, term.LockKey)
-		bw.writeStringCPEntry(buf, term.ThenBB.Id.Value())
+		bw.writeStringCPEntry(buf, term.ThenBB.ID.Value())
 	case *bir.ResourceFunctionCall:
 		bw.writeOperand(buf, &term.Receiver)
 		bw.writeStringCPEntry(buf, term.MethodName)
@@ -453,7 +476,7 @@ func (bw *birWriter) writeTerminator(buf *bytes.Buffer, term bir.BIRTerminator) 
 		} else {
 			write(buf, uint8(0))
 		}
-		bw.writeStringCPEntry(buf, term.ThenBB.Id.Value())
+		bw.writeStringCPEntry(buf, term.ThenBB.ID.Value())
 	default:
 		panic(fmt.Sprintf("unsupported terminator type: %T", term))
 	}
@@ -461,36 +484,38 @@ func (bw *birWriter) writeTerminator(buf *bytes.Buffer, term bir.BIRTerminator) 
 
 func (bw *birWriter) writeOperand(buf *bytes.Buffer, op *bir.BIROperand) {
 	if op == nil || op.VariableDcl == nil {
-		write(buf, false)
-		write(buf, uint8(bir.VAR_KIND_TEMP))
-		bw.writeScope(buf, bir.VAR_SCOPE_FUNCTION)
-		bw.writeStringCPEntry(buf, "")
+		write(buf, true)
+		bw.writeType(buf, semtypes.SemType{})
 		return
 	}
 
 	write(buf, false)
-	// Determine kind and scope from concrete type
-	var kind bir.VarKind
-	var scope bir.VarScope
-	if _, ok := op.VariableDcl.(*bir.BIRGlobalVariableDcl); ok {
-		kind = bir.VAR_KIND_GLOBAL
-		scope = bir.VAR_SCOPE_GLOBAL
-	} else {
-		kind = bir.VAR_KIND_LOCAL
-		scope = bir.VAR_SCOPE_FUNCTION
-	}
-	bw.writeKind(buf, kind)
-	bw.writeScope(buf, scope)
-	name := op.VariableDcl.GetName()
-	bw.writeStringCPEntry(buf, name.Value())
 	if gv, ok := op.VariableDcl.(*bir.BIRGlobalVariableDcl); ok {
+		bw.writeKind(buf, bir.VarKindGlobal)
+		bw.writeScope(buf, bir.VarScopeGlobal)
+		name := gv.GetName()
+		bw.writeStringCPEntry(buf, name.Value())
 		bw.writeStringCPEntry(buf, gv.GlobalVarLookupKey)
-		bw.writePackageCPEntry(buf, gv.PkgId)
-	} else {
-		write(buf, uint8(op.Address.Mode))
-		write(buf, int32(op.Address.FrameIndex))
-		write(buf, int32(op.Address.BaseIndex))
+		bw.writePackageCPEntry(buf, gv.PkgID)
+		return
 	}
+
+	localDcl, ok := op.VariableDcl.(*bir.BIRLocalVariableDcl)
+	if !ok {
+		panic(fmt.Sprintf("unexpected local variable declaration type: %T", op.VariableDcl))
+	}
+	id, ok := bw.localDclIDs[localDcl]
+	if !ok {
+		id = int32(len(bw.localDclList))
+		bw.localDclIDs[localDcl] = id
+		bw.localDclList = append(bw.localDclList, localDcl)
+	}
+	bw.writeKind(buf, bir.VarKindLocal)
+	bw.writeScope(buf, bir.VarScopeFunction)
+	write(buf, id)
+	write(buf, uint8(op.Address.Mode))
+	write(buf, int32(op.Address.FrameIndex))
+	write(buf, int32(op.Address.BaseIndex))
 }
 
 func (bw *birWriter) writeConstValue(buf *bytes.Buffer, value any) {
@@ -500,6 +525,19 @@ func (bw *birWriter) writeConstValue(buf *bytes.Buffer, value any) {
 	}
 	write(buf, int8(tag))
 	bw.writeConstValueByTag(buf, tag, value)
+}
+
+func (bw *birWriter) writeAnnotationValues(buf *bytes.Buffer, annotations values.AnnotationValues) {
+	keys := make([]string, 0, len(annotations))
+	for key := range annotations {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	bw.writeLength(buf, len(keys))
+	for _, key := range keys {
+		bw.writeStringCPEntry(buf, key)
+		bw.writeConstValue(buf, annotations[key])
+	}
 }
 
 func (bw *birWriter) writeConstValueByTag(buf *bytes.Buffer, tag typeTag, value any) {

@@ -20,10 +20,10 @@ import (
 	"os"
 	"testing"
 
-	"ballerina-lang-go/context"
-	"ballerina-lang-go/projects"
-	"ballerina-lang-go/semtypes"
-	"ballerina-lang-go/test_util/testphases"
+	"github.com/ballerina-nutcracker/ballerina/context"
+	"github.com/ballerina-nutcracker/ballerina/projects"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/test_util/testphases"
 )
 
 func BenchmarkLanguageService(b *testing.B) {

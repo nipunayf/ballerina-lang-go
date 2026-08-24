@@ -18,37 +18,21 @@
 World))))
       (var-def
         (variable $desugar$2 (expr
-          (invocation $default$0 (
+          (invocation $default$1 (
             (simple-var-ref $desugar$0)
             (simple-var-ref $desugar$1))))))
-      (var-def
-        (variable $desugar$3 (expr
+      (expression-stmt
+        (checked-expr
           (invocation io fileWriteString (
             (simple-var-ref $desugar$0)
             (simple-var-ref $desugar$1)
-            (simple-var-ref $desugar$2))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$3))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$3))) ())
-      (expression-stmt
-        (simple-var-ref $desugar$3))
-      (var-def
-        (variable $desugar$4 (expr
-          (invocation io fileReadString (
-            (simple-var-ref path))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$4))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$4))) ())
+            (simple-var-ref $desugar$2)))))
       (var-def
         (variable content (type
           (value-type string)) (expr
-          (simple-var-ref $desugar$4))))
+          (checked-expr
+            (invocation io fileReadString (
+              (simple-var-ref path)))))))
       (expression-stmt
         (invocation io println (
           (simple-var-ref content)))))))

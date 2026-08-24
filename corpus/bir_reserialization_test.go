@@ -22,11 +22,11 @@ import (
 	"strings"
 	"testing"
 
-	"ballerina-lang-go/bir"
-	bircodec "ballerina-lang-go/bir/codec"
-	"ballerina-lang-go/context"
-	"ballerina-lang-go/semtypes"
-	"ballerina-lang-go/test_util"
+	"github.com/ballerina-nutcracker/ballerina/bir"
+	bircodec "github.com/ballerina-nutcracker/ballerina/bir/codec"
+	"github.com/ballerina-nutcracker/ballerina/context"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/test_util"
 )
 
 func TestBIRSerializationRoundtrip(t *testing.T) {

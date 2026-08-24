@@ -39,10 +39,10 @@ import (
 	"testing"
 	"time"
 
-	"ballerina-lang-go/platform/pal"
-	"ballerina-lang-go/platform/palnative"
-	"ballerina-lang-go/test_util"
-	"ballerina-lang-go/test_util/testharness"
+	"github.com/ballerina-nutcracker/ballerina/platform/pal"
+	"github.com/ballerina-nutcracker/ballerina/platform/palnative"
+	"github.com/ballerina-nutcracker/ballerina/test_util"
+	"github.com/ballerina-nutcracker/ballerina/test_util/testharness"
 )
 
 // rewritingHTTPClient forwards requests from "http://testserver/..." (the

@@ -18,33 +18,17 @@
             (literal true)
             (literal hello)
             (literal <nil>)))))
-      (var-def
-        (variable $desugar$0 (expr
+      (expression-stmt
+        (checked-expr
           (invocation io fileWriteJson (
             (simple-var-ref path)
-            (simple-var-ref data))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$0))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$0))) ())
-      (expression-stmt
-        (simple-var-ref $desugar$0))
-      (var-def
-        (variable $desugar$1 (expr
-          (invocation io fileReadJson (
-            (simple-var-ref path))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$1))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$1))) ())
+            (simple-var-ref data)))))
       (var-def
         (variable result (type
           (builtin-ref-type json)) (expr
-          (simple-var-ref $desugar$1))))
+          (checked-expr
+            (invocation io fileReadJson (
+              (simple-var-ref path)))))))
       (var-def
         (variable arr (type
           (array-type

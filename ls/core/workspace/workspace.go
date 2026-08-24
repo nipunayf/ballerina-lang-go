@@ -36,10 +36,10 @@ import (
 	"sync"
 	"time"
 
-	"ballerina-lang-go/ls/core/event"
-	"ballerina-lang-go/ls/core/uri"
-	"ballerina-lang-go/platform/pal"
-	"ballerina-lang-go/projects"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/event"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/uri"
+	"github.com/ballerina-nutcracker/ballerina/platform/pal"
+	"github.com/ballerina-nutcracker/ballerina/projects"
 )
 
 // defaultMaxProjects is the conservative Phase-B count bound for the project

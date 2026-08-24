@@ -23,9 +23,9 @@ import (
 	"slices"
 	"strings"
 
-	"ballerina-lang-go/model"
-	"ballerina-lang-go/tools/diagnostics"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/model"
+	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
+	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
 // TODO: may be we should rewrite this on top of a visitor.
@@ -76,8 +76,14 @@ func (p *PrettyPrinter) PrintInner(node BLangNode) {
 		p.printReturnTypeDescriptor(t)
 	case *BLangBlockFunctionBody:
 		p.printBlockFunctionBody(t)
-	case *BLangSimpleVariable:
-		p.printSimpleVariable(t)
+	case *BLangExprFunctionBody:
+		p.printExprFunctionBody(t)
+	case *BLangVariable:
+		if t.IsConstant() {
+			p.printConstant(t)
+		} else {
+			p.printVariable(t)
+		}
 	case *BLangIf:
 		p.printIf(t)
 	case *BLangBlockStmt:
@@ -86,8 +92,8 @@ func (p *PrettyPrinter) PrintInner(node BLangNode) {
 		p.printExpressionStmt(t)
 	case *BLangReturn:
 		p.printReturn(t)
-	case *BLangSimpleVarRef:
-		p.printSimpleVarRef(t)
+	case *BLangVarRef:
+		p.printVarRef(t)
 	case *BLangLiteral:
 		p.printLiteral(t)
 	case *BLangNumericLiteral:
@@ -102,14 +108,16 @@ func (p *PrettyPrinter) PrintInner(node BLangNode) {
 		p.printClientResourceAccessAction(t)
 	case *BLangNamedArgsExpression:
 		p.printNamedArgsExpression(t)
+	case *BLangDefaultArg:
+		p.PrintString("<default>")
 	case *BLangValueType:
 		p.printValueType(t)
 	case *BLangBuiltInRefTypeNode:
 		p.printBuiltInRefTypeNode(t)
 	case *BLangUnaryExpr:
 		p.printUnaryExpr(t)
-	case *BLangSimpleVariableDef:
-		p.printSimpleVariableDef(t)
+	case *BLangVariableDef:
+		p.printVariableDef(t)
 	case *BLangGroupExpr:
 		p.printGroupExpr(t)
 	case *BLangWhile:
@@ -120,8 +128,6 @@ func (p *PrettyPrinter) PrintInner(node BLangNode) {
 		p.printForeach(t)
 	case *BLangArrayType:
 		p.printArrayType(t)
-	case *BLangConstant:
-		p.printConstant(t)
 	case *BLangBreak:
 		p.printBreak(t)
 	case *BLangContinue:
@@ -345,8 +351,9 @@ func (p *PrettyPrinter) printImportPackage(node *BLangImportPackage) {
 func (p *PrettyPrinter) printCompilationUnit(node *BLangCompilationUnit) {
 	p.StartNode()
 	p.PrintString("compilation-unit")
-	p.PrintString(node.Name)
-	p.printSourceKind(node.sourceKind)
+	if node.Name != "" {
+		p.PrintString(node.Name)
+	}
 	p.printPackageID(node.packageID)
 	p.printBLangNodeBase(&node.bLangNodeBase)
 	p.indentLevel++
@@ -357,47 +364,42 @@ func (p *PrettyPrinter) printCompilationUnit(node *BLangCompilationUnit) {
 	p.EndNode()
 }
 
-func (p *PrettyPrinter) printSourceKind(sourceKind SourceKind) {
-	switch sourceKind {
-	case SourceKind_REGULAR_SOURCE:
-		p.PrintString("regular-source")
-	case SourceKind_TEST_SOURCE:
-		p.PrintString("test-source")
-	default:
-		panic(fmt.Sprintf("Unsupported source kind: %d", int(sourceKind)))
-	}
-}
-
 func (p *PrettyPrinter) printPackage(node *BLangPackage) {
 	p.StartNode()
 	p.PrintString("package")
 	p.indentLevel++
-	for i := range node.Imports {
-		p.PrintInner(&node.Imports[i])
+	sortedImports := slices.SortedFunc(slices.Values(node.Imports), func(a, b *BLangImportPackage) int {
+		return cmp.Compare(a.Alias.Value, b.Alias.Value)
+	})
+	for i := range sortedImports {
+		p.PrintInner(sortedImports[i])
+	}
+	for i := range node.XmlnsList {
+		p.PrintInner(node.XmlnsList[i])
 	}
 	for i := range node.Constants {
-		p.PrintInner(&node.Constants[i])
+		p.PrintInner(node.Constants[i])
 	}
 	for i := range node.GlobalVars {
-		p.PrintInner(&node.GlobalVars[i])
+		p.PrintInner(node.GlobalVars[i])
 	}
 	for i := range node.Annotations {
-		p.PrintInner(&node.Annotations[i])
+		p.PrintInner(node.Annotations[i])
 	}
 	for i := range node.TypeDefinitions {
-		p.PrintInner(&node.TypeDefinitions[i])
+		p.PrintInner(node.TypeDefinitions[i])
 	}
 	for i := range node.ClassDefinitions {
-		p.PrintInner(&node.ClassDefinitions[i])
+		p.PrintInner(node.ClassDefinitions[i])
 	}
 	for i := range node.Services {
-		p.PrintInner(&node.Services[i])
+		p.PrintInner(node.Services[i])
 	}
 	if node.InitFunction != nil {
 		p.PrintInner(node.InitFunction)
 	}
 	for i := range node.Functions {
-		p.PrintInner(&node.Functions[i])
+		p.PrintInner(node.Functions[i])
 	}
 	p.indentLevel--
 	p.EndNode()
@@ -486,12 +488,13 @@ func (p *PrettyPrinter) printOperatorKind(opKind model.OperatorKind) {
 }
 
 func (p *PrettyPrinter) printTypeKind(typeKind TypeKind) {
-	p.PrintString(string(typeKind))
+	p.PrintString(typeKind.String())
 }
 
 func (p *PrettyPrinter) printAnnotationAttachments(node AnnotatableNode) {
-	for _, attachment := range node.GetAnnotationAttachments() {
-		p.PrintInner(attachment.(BLangNode))
+	attachments := node.GetAnnotationAttachments()
+	for i := range attachments {
+		p.PrintInner(&attachments[i])
 	}
 }
 
@@ -635,7 +638,7 @@ func (p *PrettyPrinter) printNumericLiteral(node *BLangNumericLiteral) {
 	p.EndNode()
 }
 
-func (p *PrettyPrinter) printSimpleVarRef(node *BLangSimpleVarRef) {
+func (p *PrettyPrinter) printVarRef(node *BLangVarRef) {
 	p.StartNode()
 	p.PrintString("simple-var-ref")
 	variableName := printableIdentifierValue(node.VariableName)
@@ -761,8 +764,9 @@ func (p *PrettyPrinter) printResourceMethod(node *BLangResourceMethod) {
 			p.printResourcePathParamSegment("rest", seg)
 		}
 	}
-	for i := range node.RequiredParams {
-		p.PrintInner(&node.RequiredParams[i])
+	params := node.GetParameters()
+	for i := range params {
+		p.PrintInner(&params[i])
 	}
 	if node.GetReturnTypeDescriptor() != nil {
 		p.PrintInner(node.GetReturnTypeDescriptor())
@@ -908,7 +912,7 @@ func (p *PrettyPrinter) printBuiltInRefTypeNode(node *BLangBuiltInRefTypeNode) {
 }
 
 // Variable and function body printers
-func (p *PrettyPrinter) printSimpleVariable(node *BLangSimpleVariable) {
+func (p *PrettyPrinter) printVariable(node *BLangVariable) {
 	p.StartNode()
 	p.PrintString("variable")
 	p.PrintString(node.Name.GetValue())
@@ -940,6 +944,17 @@ func (p *PrettyPrinter) printBlockFunctionBody(node *BLangBlockFunctionBody) {
 	p.EndNode()
 }
 
+func (p *PrettyPrinter) printExprFunctionBody(node *BLangExprFunctionBody) {
+	p.StartNode()
+	p.PrintString("expr-function-body")
+	if node.Expr != nil {
+		p.indentLevel++
+		p.PrintInner(node.Expr.(BLangNode))
+		p.indentLevel--
+	}
+	p.EndNode()
+}
+
 // Function printer
 func (p *PrettyPrinter) printFunction(node *BLangFunction) {
 	p.StartNode()
@@ -958,8 +973,9 @@ func (p *PrettyPrinter) printFunction(node *BLangFunction) {
 	// Print parameters
 	p.PrintString("(")
 	p.indentLevel++
-	for i := range node.RequiredParams {
-		p.PrintInner(&node.RequiredParams[i])
+	params := node.GetParameters()
+	for i := range params {
+		p.PrintInner(&params[i])
 	}
 	p.indentLevel--
 	p.printSticky(")")
@@ -998,7 +1014,7 @@ func (p *PrettyPrinter) printUnaryExpr(node *BLangUnaryExpr) {
 }
 
 // Variable definition printer
-func (p *PrettyPrinter) printSimpleVariableDef(node *BLangSimpleVariableDef) {
+func (p *PrettyPrinter) printVariableDef(node *BLangVariableDef) {
 	p.StartNode()
 	p.PrintString("var-def")
 	p.indentLevel++
@@ -1132,7 +1148,7 @@ func (p *PrettyPrinter) printGroupByClause(node *BLangGroupByClause) {
 	p.PrintString("group-by-clause")
 	p.indentLevel++
 	for _, groupingKey := range node.GetGroupingKeyList() {
-		p.PrintInner(groupingKey.(BLangNode))
+		p.PrintInner(groupingKey)
 	}
 	p.indentLevel--
 	p.EndNode()
@@ -1281,19 +1297,17 @@ func (p *PrettyPrinter) printArrayType(node *BLangArrayType) {
 }
 
 // Constant declaration printer
-func (p *PrettyPrinter) printConstant(node *BLangConstant) {
+func (p *PrettyPrinter) printConstant(node *BLangVariable) {
 	p.StartNode()
 	p.PrintString("const")
 	p.PrintString(node.Name.GetValue())
 
 	// Print markdown documentation if present
 	if node.MarkdownDocumentationAttachment != nil {
-		if bn, ok := node.MarkdownDocumentationAttachment.(BLangNode); ok {
-			p.indentLevel++
-			p.PrintInner(bn)
-			p.indentLevel--
-			p.addSpaceBeforeNode = true
-		}
+		p.indentLevel++
+		p.PrintInner(node.MarkdownDocumentationAttachment)
+		p.indentLevel--
+		p.addSpaceBeforeNode = true
 	}
 
 	p.PrintString("(")
@@ -1506,8 +1520,8 @@ func (p *PrettyPrinter) printMarkdownDocumentation(node *BLangMarkdownDocumentat
 		p.buffer.WriteString("(doc-lines")
 		p.addSpaceBeforeNode = false
 		p.indentLevel++
-		for _, line := range node.DocumentationLines {
-			p.PrintInner(&line)
+		for i := range node.DocumentationLines {
+			p.PrintInner(&node.DocumentationLines[i])
 		}
 		p.indentLevel--
 		p.buffer.WriteString(")")
@@ -2082,7 +2096,7 @@ func (p *PrettyPrinter) printClassDefinition(node *BLangClassDefinition) {
 	p.printAnnotationAttachments(node)
 	// Print fields
 	for _, field := range node.Fields {
-		p.PrintInner(field.(BLangNode))
+		p.PrintInner(field)
 	}
 	// Print init function
 	if node.InitFunction != nil {
@@ -2122,12 +2136,16 @@ func (p *PrettyPrinter) printService(node *BLangService) {
 		p.indentLevel++
 		p.PrintInner(node.AttachPointLiteral)
 		p.indentLevel--
-	} else if len(node.AbsoluteResourcePath) > 0 {
+	} else if node.AbsoluteResourcePath != nil {
 		p.indentLevel++
 		p.StartNode()
 		p.PrintString("absolute-resource-path")
-		for i := range node.AbsoluteResourcePath {
-			p.PrintString(node.AbsoluteResourcePath[i].Value)
+		if len(node.AbsoluteResourcePath) == 0 {
+			p.PrintString("/")
+		} else {
+			for i := range node.AbsoluteResourcePath {
+				p.PrintString(node.AbsoluteResourcePath[i].Value)
+			}
 		}
 		p.EndNode()
 		p.indentLevel--
@@ -2141,7 +2159,7 @@ func (p *PrettyPrinter) printService(node *BLangService) {
 	p.EndNode()
 	// Print the embedded class members.
 	for _, field := range node.Fields {
-		p.PrintInner(field.(BLangNode))
+		p.PrintInner(field)
 	}
 	if node.InitFunction != nil {
 		p.PrintInner(node.InitFunction)
@@ -2191,7 +2209,7 @@ func (p *PrettyPrinter) printFunctionType(node *BLangFunctionType) {
 	if len(node.RequiredParams) > 0 {
 		p.indentLevel++
 		for i := range node.RequiredParams {
-			param := &node.RequiredParams[i]
+			param := node.RequiredParams[i]
 			if param.TypeDesc != nil {
 				p.PrintInner(param.TypeDesc.(BLangNode))
 			}

@@ -21,9 +21,9 @@ import (
 	"sync"
 	"time"
 
-	"ballerina-lang-go/ls/core/event"
-	"ballerina-lang-go/ls/core/uri"
-	"ballerina-lang-go/projects"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/event"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/uri"
+	"github.com/ballerina-nutcracker/ballerina/projects"
 )
 
 // indexEntry is one slot in the source-root-keyed project index.

@@ -19,7 +19,7 @@ package server
 import (
 	"testing"
 
-	"ballerina-lang-go/ls/protocol"
+	"github.com/ballerina-nutcracker/ballerina/ls/protocol"
 )
 
 func TestApplyChangesUTF16(t *testing.T) {

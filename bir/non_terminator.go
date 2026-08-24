@@ -17,8 +17,8 @@
 package bir
 
 import (
-	"ballerina-lang-go/semtypes"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
 type BIRNonTerminator = BIRInstruction
@@ -75,8 +75,8 @@ type (
 		IsReadonly bool
 	}
 
-	// JBallerina call this NewStruct but prints as NewMap
 	NewMap struct {
+		// JBallerina call this NewStruct but prints as NewMap
 		BIRInstructionBase
 		Type       semtypes.SemType
 		Values     []MappingConstructorEntry
@@ -235,7 +235,7 @@ func (m *Move) GetLhsOperand() *BIROperand {
 }
 
 func (m *Move) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_MOVE
+	return InstructionKindMove
 }
 
 func NewMove(fromOperand, toOperand *BIROperand, pos Location) *Move {
@@ -298,7 +298,7 @@ func (c *ConstantLoad) GetLhsOperand() *BIROperand {
 }
 
 func (c *ConstantLoad) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_CONST_LOAD
+	return InstructionKindConstLoad
 }
 
 func NewConstantLoad(lhsOp *BIROperand, value any, pos Location) *ConstantLoad {
@@ -340,7 +340,7 @@ func (n *NewArray) GetLhsOperand() *BIROperand {
 }
 
 func (n *NewArray) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_NEW_ARRAY
+	return InstructionKindNewArray
 }
 
 func NewArrayConstructor(typ semtypes.SemType, lhsOp, sizeOp *BIROperand, values []*BIROperand, filler values.FillerFactory, isReadonly bool, pos Location) *NewArray {
@@ -364,7 +364,7 @@ func (t *TypeCast) GetLhsOperand() *BIROperand {
 }
 
 func (t *TypeCast) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_TYPE_CAST
+	return InstructionKindTypeCast
 }
 
 func NewTypeCast(typ semtypes.SemType, lhsOp, rhsOp *BIROperand, pos Location) *TypeCast {
@@ -385,7 +385,7 @@ func (t *TypeTest) GetLhsOperand() *BIROperand {
 }
 
 func (t *TypeTest) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_TYPE_TEST
+	return InstructionKindTypeTest
 }
 
 func NewTypeTest(typ semtypes.SemType, lhsOp, rhsOp *BIROperand, pos Location) *TypeTest {
@@ -406,11 +406,11 @@ func (f *FPLoad) GetLhsOperand() *BIROperand {
 }
 
 func (f *FPLoad) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_FP_LOAD
+	return InstructionKindFPLoad
 }
 
 func (n *NewMap) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_NEW_STRUCTURE
+	return InstructionKindNewStructure
 }
 
 func NewMapConstructor(typ semtypes.SemType, lhsOp *BIROperand, values []MappingConstructorEntry, defaults []MappingConstructorDefaultEntry, isReadonly bool, pos Location) *NewMap {
@@ -429,7 +429,7 @@ func NewMapConstructor(typ semtypes.SemType, lhsOp *BIROperand, values []Mapping
 }
 
 func (n *NewError) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_NEW_ERROR
+	return InstructionKindNewError
 }
 
 func (n *NewError) GetLhsOperand() *BIROperand {
@@ -457,7 +457,7 @@ func (n *NewMap) GetLhsOperand() *BIROperand {
 }
 
 func (n *NewObject) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_NEW_INSTANCE
+	return InstructionKindNewInstance
 }
 
 func (n *NewObject) GetLhsOperand() *BIROperand {
@@ -477,7 +477,7 @@ func NewObjectConstructor(classDefRef string, lhsOp *BIROperand, pos Location) *
 }
 
 func (n *NewStream) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_NEW_STREAM
+	return InstructionKindNewStream
 }
 
 func (n *NewStream) GetLhsOperand() *BIROperand {
@@ -496,7 +496,7 @@ func NewStreamConstructor(streamType semtypes.SemType, lhsOp, implOp *BIROperand
 }
 
 func (n *StreamNext) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_STREAM_NEXT
+	return InstructionKindStreamNext
 }
 
 func (n *StreamNext) GetLhsOperand() *BIROperand {
@@ -514,7 +514,7 @@ func NewStreamNext(lhsOp, streamOp *BIROperand, pos Location) *StreamNext {
 }
 
 func (n *StreamClose) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_STREAM_CLOSE
+	return InstructionKindStreamClose
 }
 
 func (n *StreamClose) GetLhsOperand() *BIROperand {
@@ -532,7 +532,7 @@ func NewStreamClose(lhsOp, streamOp *BIROperand, pos Location) *StreamClose {
 }
 
 func (p *PushScopeFrame) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_PUSH_SCOPE
+	return InstructionKindPushScope
 }
 
 func (p *PushScopeFrame) GetLhsOperand() *BIROperand {
@@ -540,7 +540,7 @@ func (p *PushScopeFrame) GetLhsOperand() *BIROperand {
 }
 
 func (p *PopScopeFrame) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_POP_SCOPE
+	return InstructionKindPopScope
 }
 
 func (p *PopScopeFrame) GetLhsOperand() *BIROperand {
@@ -580,7 +580,7 @@ func (m *MappingConstructorKeyValueEntry) KeyOp() *BIROperand {
 }
 
 func (n *NewXMLElement) GetLhsOperand() *BIROperand { return n.LhsOp }
-func (n *NewXMLElement) GetKind() InstructionKind   { return INSTRUCTION_KIND_NEW_XML_ELEMENT }
+func (n *NewXMLElement) GetKind() InstructionKind   { return InstructionKindNewXMLElement }
 
 func NewXMLElementInstr(lhsOp, nameOp, childrenOp, attrsOp, namespacesOp *BIROperand, pos Location) *NewXMLElement {
 	return &NewXMLElement{
@@ -596,7 +596,7 @@ func NewXMLElementInstr(lhsOp, nameOp, childrenOp, attrsOp, namespacesOp *BIROpe
 }
 
 func (n *NewXMLPI) GetLhsOperand() *BIROperand { return n.LhsOp }
-func (n *NewXMLPI) GetKind() InstructionKind   { return INSTRUCTION_KIND_NEW_XML_PI }
+func (n *NewXMLPI) GetKind() InstructionKind   { return InstructionKindNewXMLPI }
 
 func NewXMLPIInstr(lhsOp, targetOp, dataOp *BIROperand, pos Location) *NewXMLPI {
 	return &NewXMLPI{
@@ -610,7 +610,7 @@ func NewXMLPIInstr(lhsOp, targetOp, dataOp *BIROperand, pos Location) *NewXMLPI 
 }
 
 func (n *NewXMLComment) GetLhsOperand() *BIROperand { return n.LhsOp }
-func (n *NewXMLComment) GetKind() InstructionKind   { return INSTRUCTION_KIND_NEW_XML_COMMENT }
+func (n *NewXMLComment) GetKind() InstructionKind   { return InstructionKindNewXMLComment }
 
 func NewXMLCommentInstr(lhsOp, bodyOp *BIROperand, pos Location) *NewXMLComment {
 	return &NewXMLComment{
@@ -623,7 +623,7 @@ func NewXMLCommentInstr(lhsOp, bodyOp *BIROperand, pos Location) *NewXMLComment 
 }
 
 func (n *NewXMLText) GetLhsOperand() *BIROperand { return n.LhsOp }
-func (n *NewXMLText) GetKind() InstructionKind   { return INSTRUCTION_KIND_NEW_XML_TEXT }
+func (n *NewXMLText) GetKind() InstructionKind   { return InstructionKindNewXMLText }
 
 func NewXMLTextInstr(lhsOp, bodyOp *BIROperand, pos Location) *NewXMLText {
 	return &NewXMLText{
@@ -636,7 +636,7 @@ func NewXMLTextInstr(lhsOp, bodyOp *BIROperand, pos Location) *NewXMLText {
 }
 
 func (n *NewXMLSequence) GetLhsOperand() *BIROperand { return n.LhsOp }
-func (n *NewXMLSequence) GetKind() InstructionKind   { return INSTRUCTION_KIND_NEW_XML_SEQUENCE }
+func (n *NewXMLSequence) GetKind() InstructionKind   { return InstructionKindNewXMLSequence }
 
 func NewXMLSequenceInstr(lhsOp *BIROperand, children []*BIROperand, pos Location) *NewXMLSequence {
 	return &NewXMLSequence{
@@ -649,7 +649,7 @@ func NewXMLSequenceInstr(lhsOp *BIROperand, children []*BIROperand, pos Location
 }
 
 func (e *EvalTemplateExpr) GetLhsOperand() *BIROperand { return e.LhsOp }
-func (e *EvalTemplateExpr) GetKind() InstructionKind   { return INSTRUCTION_KIND_EVAL_TEMPLATE_EXPR }
+func (e *EvalTemplateExpr) GetKind() InstructionKind   { return InstructionKindEvalTemplateExpr }
 
 func NewEvalTemplateExpr(kind TemplateKind, strings []string, insertions []*BIROperand, lhsOp *BIROperand, pos Location) *EvalTemplateExpr {
 	literalTotalLen := 0

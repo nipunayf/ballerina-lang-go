@@ -17,9 +17,9 @@
 package bir
 
 import (
-	"ballerina-lang-go/common"
-	"ballerina-lang-go/model"
-	"ballerina-lang-go/runtime/extern"
+	"github.com/ballerina-nutcracker/ballerina/common"
+	"github.com/ballerina-nutcracker/ballerina/model"
+	"github.com/ballerina-nutcracker/ballerina/runtime/extern"
 )
 
 type BIRTerminator = BIRInstruction
@@ -98,7 +98,7 @@ var (
 )
 
 func (g *Goto) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_GOTO
+	return InstructionKindGoto
 }
 
 func NewReturn(pos Location) *Return {
@@ -152,23 +152,23 @@ func NewCall(kind InstructionKind, args []BIROperand, name model.Name, thenBB *B
 }
 
 func (r *Return) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_RETURN
+	return InstructionKindReturn
 }
 
 func (b *Branch) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_BRANCH
+	return InstructionKindBranch
 }
 
 func (p *Panic) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_PANIC
+	return InstructionKindPanic
 }
 
 func (l *LockStart) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_LOCK
+	return InstructionKindLock
 }
 
 func (l *LockEnd) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_UNLOCK
+	return InstructionKindUnlock
 }
 
 func NewLockStart(key string, thenBB *BIRBasicBlock, pos Location) *LockStart {
@@ -209,7 +209,7 @@ func NewPanic(errorOp *BIROperand, pos Location) *Panic {
 }
 
 func (r *ResourceFunctionCall) GetKind() InstructionKind {
-	return INSTRUCTION_KIND_RESOURCE_CALL
+	return InstructionKindResourceCall
 }
 
 func (r *ResourceFunctionCall) GetLhsOperand() *BIROperand {

@@ -29,21 +29,13 @@
             (literal 101)
             (literal 116)))))
       (var-def
-        (variable $desugar$0 (expr
-          (invocation crypto hmacSha256 (
-            (simple-var-ref input)
-            (simple-var-ref key))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$0))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$0))) ())
-      (var-def
         (variable mac (type
           (array-type
             (value-type byte) dimensions: 1 ([]))) (expr
-          (simple-var-ref $desugar$0))))
+          (checked-expr
+            (invocation crypto hmacSha256 (
+              (simple-var-ref input)
+              (simple-var-ref key)))))))
       (expression-stmt
         (invocation io println (
           (invocation lang.array length (

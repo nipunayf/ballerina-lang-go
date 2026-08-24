@@ -8,35 +8,19 @@
       (value-type null)))
     (block-function-body
       (var-def
-        (variable $desugar$0 (expr
-          (invocation http parseHeader (
-            (literal text/plain;q=0.9, application/json))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$0))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$0))) ())
-      (var-def
         (variable values (expr
-          (simple-var-ref $desugar$0))))
+          (checked-expr
+            (invocation http parseHeader (
+              (literal text/plain;q=0.9, application/json)))))))
       (expression-stmt
         (invocation io println (
           (invocation lang.array length (
             (simple-var-ref values))))))
       (var-def
-        (variable $desugar$1 (expr
-          (invocation http parseHeader (
-            (literal multipart/form-data; boundary="----boundary"))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$1))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$1))) ())
-      (var-def
         (variable quoted (expr
-          (simple-var-ref $desugar$1))))
+          (checked-expr
+            (invocation http parseHeader (
+              (literal multipart/form-data; boundary="----boundary")))))))
       (expression-stmt
         (invocation io println (
           (invocation lang.array length (
@@ -58,18 +42,10 @@
               (literal params))
             (literal boundary)))))
       (var-def
-        (variable $desugar$2 (expr
-          (invocation http parseHeader (
-            (literal multipart/form-data; boundary))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$2))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$2))) ())
-      (var-def
         (variable noVal (expr
-          (simple-var-ref $desugar$2))))
+          (checked-expr
+            (invocation http parseHeader (
+              (literal multipart/form-data; boundary)))))))
       (expression-stmt
         (invocation io println (
           (invocation lang.array length (
@@ -84,18 +60,10 @@
               (literal params))
             (literal boundary)))))
       (var-def
-        (variable $desugar$3 (expr
-          (invocation http parseHeader (
-            (literal text/html))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$3))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$3))) ())
-      (var-def
         (variable single (expr
-          (simple-var-ref $desugar$3))))
+          (checked-expr
+            (invocation http parseHeader (
+              (literal text/html)))))))
       (expression-stmt
         (invocation io println (
           (invocation lang.array length (

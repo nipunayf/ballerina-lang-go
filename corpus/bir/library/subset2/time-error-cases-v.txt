@@ -57,82 +57,84 @@ main() -> nil|error{
     %36 = println(%35) -> bb10;
   }
   bb10 {
-    %37 = ConstantLoad year
-    %38 = ConstantLoad 2021
-    %39 = ConstantLoad month
-    %40 = ConstantLoad 4
-    %41 = ConstantLoad day
-    %42 = ConstantLoad 12
-    %43 = ConstantLoad hour
-    %44 = ConstantLoad 23
-    %45 = ConstantLoad minute
-    %46 = ConstantLoad 20
-    %47 = ConstantLoad second
-    %48 = ConstantLoad 50
-    %49 = ConstantLoad utcOffset
-    %50 = ConstantLoad hours
-    %51 = ConstantLoad 5
-    %52 = ConstantLoad minutes
-    %53 = ConstantLoad 30
-    %54 = newMap {| hours: int, minutes: int, seconds: decimal, never... |}{%50=%51, %52=%53} defaults{minutes=ballerina/time:$desugar$0}
-    %55 = newMap {| day: int, dayOfWeek: 0|1|2|3|4|5|6, hour: int, minute: int, month: int, second: decimal, timeAbbrev: string, utcOffset: {| hours: int, minutes: int, seconds: decimal, never... |}, which: 0|1, year: int, anydata... |}{%37=%38, %39=%40, %41=%42, %43=%44, %45=%46, %47=%48, %49=%54}
-    %56 = utcFromCivil(%55) -> bb11;
+    %38 = ConstantLoad year
+    %39 = ConstantLoad 2021
+    %40 = ConstantLoad month
+    %41 = ConstantLoad 4
+    %42 = ConstantLoad day
+    %43 = ConstantLoad 12
+    %44 = ConstantLoad hour
+    %45 = ConstantLoad 23
+    %46 = ConstantLoad minute
+    %47 = ConstantLoad 20
+    %48 = ConstantLoad second
+    %49 = ConstantLoad 50
+    %50 = ConstantLoad utcOffset
+    %51 = ConstantLoad hours
+    %52 = ConstantLoad 5
+    %53 = ConstantLoad minutes
+    %54 = ConstantLoad 30
+    %55 = newMap {| hours: int, minutes: int, seconds: decimal, never... |}{%51=%52, %53=%54} defaults{minutes=ballerina/time:$desugar$0}
+    %56 = newMap {| day: int, dayOfWeek: 0|1|2|3|4|5|6, hour: int, minute: int, month: int, second: decimal, timeAbbrev: string, utcOffset: {| hours: int, minutes: int, seconds: decimal, never... |}, which: 0|1, year: int, anydata... |}{%38=%39, %40=%41, %42=%43, %44=%45, %46=%47, %48=%49, %50=%55}
+    %57 = utcFromCivil(%56) -> bb11;
   }
   bb11 {
-    $desugar$1 = %56;
-    %58 = $desugar$1 is error
+    %58 = %57 is error
     %58 ? bb12 : bb13;
   }
   bb12 {
-    PushScopeFrame 0
-    (1, %0) = (1, $desugar$1);
-    PopScopeFrame
+    %0 = %57;
     return;
   }
   bb13 {
-    fromOffset = $desugar$1;
-    %60 = utcToString(fromOffset) -> bb14;
+    %37 = %57;
+    GOTO bb14;
   }
   bb14 {
-    %61 = println(%60) -> bb15;
+    fromOffset = %37;
+    %60 = utcToString(fromOffset) -> bb15;
   }
   bb15 {
-    %62 = ConstantLoad year
-    %63 = ConstantLoad 2021
-    %64 = ConstantLoad month
-    %65 = ConstantLoad 4
-    %66 = ConstantLoad day
-    %67 = ConstantLoad 12
-    %68 = ConstantLoad hour
-    %69 = ConstantLoad 17
-    %70 = ConstantLoad minute
-    %71 = ConstantLoad 50
-    %72 = ConstantLoad second
-    %73 = ConstantLoad 50
-    %74 = ConstantLoad timeAbbrev
-    %75 = ConstantLoad Z
-    %76 = newMap {| day: int, dayOfWeek: 0|1|2|3|4|5|6, hour: int, minute: int, month: int, second: decimal, timeAbbrev: string, utcOffset: {| hours: int, minutes: int, seconds: decimal, never... |}, which: 0|1, year: int, anydata... |}{%62=%63, %64=%65, %66=%67, %68=%69, %70=%71, %72=%73, %74=%75}
-    %77 = utcFromCivil(%76) -> bb16;
+    %61 = println(%60) -> bb16;
   }
   bb16 {
-    $desugar$2 = %77;
-    %79 = $desugar$2 is error
-    %79 ? bb17 : bb18;
+    %63 = ConstantLoad year
+    %64 = ConstantLoad 2021
+    %65 = ConstantLoad month
+    %66 = ConstantLoad 4
+    %67 = ConstantLoad day
+    %68 = ConstantLoad 12
+    %69 = ConstantLoad hour
+    %70 = ConstantLoad 17
+    %71 = ConstantLoad minute
+    %72 = ConstantLoad 50
+    %73 = ConstantLoad second
+    %74 = ConstantLoad 50
+    %75 = ConstantLoad timeAbbrev
+    %76 = ConstantLoad Z
+    %77 = newMap {| day: int, dayOfWeek: 0|1|2|3|4|5|6, hour: int, minute: int, month: int, second: decimal, timeAbbrev: string, utcOffset: {| hours: int, minutes: int, seconds: decimal, never... |}, which: 0|1, year: int, anydata... |}{%63=%64, %65=%66, %67=%68, %69=%70, %71=%72, %73=%74, %75=%76}
+    %78 = utcFromCivil(%77) -> bb17;
   }
   bb17 {
-    PushScopeFrame 0
-    (1, %0) = (1, $desugar$2);
-    PopScopeFrame
-    return;
+    %79 = %78 is error
+    %79 ? bb18 : bb19;
   }
   bb18 {
-    fromZ = $desugar$2;
-    %81 = utcToString(fromZ) -> bb19;
+    %0 = %78;
+    return;
   }
   bb19 {
-    %82 = println(%81) -> bb20;
+    %62 = %78;
+    GOTO bb20;
   }
   bb20 {
+    fromZ = %62;
+    %81 = utcToString(fromZ) -> bb21;
+  }
+  bb21 {
+    %82 = println(%81) -> bb22;
+  }
+  bb22 {
     %83 = ConstantLoad year
     %84 = ConstantLoad 2021
     %85 = ConstantLoad month
@@ -144,15 +146,15 @@ main() -> nil|error{
     %91 = ConstantLoad minute
     %92 = ConstantLoad 50
     %93 = newMap {| day: int, dayOfWeek: 0|1|2|3|4|5|6, hour: int, minute: int, month: int, second: decimal, timeAbbrev: string, utcOffset: {| hours: int, minutes: int, seconds: decimal, never... |}, which: 0|1, year: int, anydata... |}{%83=%84, %85=%86, %87=%88, %89=%90, %91=%92}
-    %94 = utcFromCivil(%93) -> bb21;
+    %94 = utcFromCivil(%93) -> bb23;
   }
-  bb21 {
+  bb23 {
     noZone = %94;
     %96 = noZone is error
     %97 = %96;
-    %98 = println(%97) -> bb22;
+    %98 = println(%97) -> bb24;
   }
-  bb22 {
+  bb24 {
     %99 = ConstantLoad year
     %100 = ConstantLoad 2021
     %101 = ConstantLoad month
@@ -167,15 +169,15 @@ main() -> nil|error{
     %110 = ConstantLoad hours
     %111 = ConstantLoad 1
     %112 = newMap {| days: int, hours: int, minutes: int, months: int, seconds: decimal, weeks: int, years: int, never... |}{%110=%111} defaults{years=ballerina/time:$desugar$2, months=ballerina/time:$desugar$3, weeks=ballerina/time:$desugar$4, days=ballerina/time:$desugar$5, hours=ballerina/time:$desugar$6, minutes=ballerina/time:$desugar$7, seconds=ballerina/time:$desugar$8}
-    %113 = civilAddDuration(%109,%112) -> bb23;
+    %113 = civilAddDuration(%109,%112) -> bb25;
   }
-  bb23 {
+  bb25 {
     addErr = %113;
     %115 = addErr is error
     %116 = %115;
-    %117 = println(%116) -> bb24;
+    %117 = println(%116) -> bb26;
   }
-  bb24 {
+  bb26 {
     return;
   }
 }

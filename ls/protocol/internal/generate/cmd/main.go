@@ -27,8 +27,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"ballerina-lang-go/ls/protocol/internal/generate"
-	"ballerina-lang-go/platform/palnative"
+	"github.com/ballerina-nutcracker/ballerina/ls/protocol/internal/generate"
+	"github.com/ballerina-nutcracker/ballerina/platform/palnative"
 )
 
 func main() {

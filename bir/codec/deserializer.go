@@ -21,13 +21,12 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"ballerina-lang-go/bir"
-	"ballerina-lang-go/context"
-	"ballerina-lang-go/decimal"
-	"ballerina-lang-go/desugar"
-	"ballerina-lang-go/model"
-	"ballerina-lang-go/semtypes"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/bir"
+	"github.com/ballerina-nutcracker/ballerina/context"
+	"github.com/ballerina-nutcracker/ballerina/decimal"
+	"github.com/ballerina-nutcracker/ballerina/model"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
 type birReader struct {
@@ -112,11 +111,11 @@ func rebindLifecycleFunctions(pkg *bir.BIRPackage) {
 	for i := range pkg.Functions {
 		fn := &pkg.Functions[i]
 		switch fn.Name.Value() {
-		case desugar.StartFunctionName:
+		case model.ModuleStartFunctionName:
 			pkg.StartFunction = fn
-		case desugar.GracefulStopFunctionName:
+		case model.ModuleGracefulStopFunctionName:
 			pkg.GracefulStopFunction = fn
-		case desugar.ImmediateStopFunctionName:
+		case model.ModuleImmediateStopFunctionName:
 			pkg.ImmediateStopFunction = fn
 		}
 	}
@@ -233,7 +232,7 @@ func (br *birReader) readGlobalVars(pkgID *model.PackageID) map[string]bir.BIRGl
 		gv.Pos = pos
 		gv.Name = name
 		gv.Type = ty
-		gv.PkgId = pkgID
+		gv.PkgID = pkgID
 
 		variables[lookupKey] = gv
 	}
@@ -254,6 +253,7 @@ func (br *birReader) readClassDef(classDef *bir.BIRClassDef) {
 	classDef.Name = name
 	lookupKey := br.readStringCPEntry()
 	classDef.LookupKey = lookupKey.Value()
+	classDef.Annotations = br.readAnnotationValues()
 
 	fieldCount := br.readLength()
 	fields := make([]bir.ObjectField, fieldCount)
@@ -291,7 +291,7 @@ func (br *birReader) readClassDef(classDef *bir.BIRClassDef) {
 			}
 			restTy := br.readType()
 			if semtypes.IsZero(restTy) {
-				restTy = semtypes.NEVER
+				restTy = semtypes.Never
 			}
 			fn := br.readFunction()
 			entries[j] = bir.BIRResourceMethod{
@@ -327,21 +327,29 @@ func (br *birReader) readFunction() *bir.BIRFunction {
 	for j := 0; j < int(requiredParamsCount); j++ {
 		paramName := br.readStringCPEntry()
 		paramFlags := br.readFlags()
+		annotations := br.readAnnotationValues()
 
 		requiredParams[j] = bir.BIRParameter{
-			Name:  paramName,
-			Flags: paramFlags,
+			Name:        paramName,
+			Flags:       paramFlags,
+			Annotations: annotations,
 		}
 	}
 
 	var hasRestParam bool
 	br.read(&hasRestParam)
+	var restParamFlags model.Flag
+	var restParamAnnotations values.AnnotationValues
+	if hasRestParam {
+		restParamFlags = br.readFlags()
+		restParamAnnotations = br.readAnnotationValues()
+	}
 
 	_ = br.readLength() // Unused?
 
 	argsCount := br.readLength()
 
-	varMap := make(map[string]bir.BIRVariableDcl)
+	varMap := make(map[int32]*bir.BIRLocalVariableDcl)
 	bbMap := make(map[string]*bir.BIRBasicBlock)
 
 	var hasReturnVar bool
@@ -356,14 +364,23 @@ func (br *birReader) readFunction() *bir.BIRFunction {
 		returnVar = &bir.BIRLocalVariableDcl{}
 		returnVar.Name = returnVarName
 		returnVar.Type = returnVarType
-		varMap[returnVarName.Value()] = returnVar
 	}
 
 	localVarCount := br.readLength()
 	localVars := make([]bir.BIRLocalVariableDcl, localVarCount)
 	for j := 0; j < int(localVarCount); j++ {
-		localVar := br.readLocalVar(varMap)
+		localVar := br.readLocalVar()
 		localVars[j] = *localVar
+	}
+
+	localDclCount := br.readLength()
+	for id := int32(0); id < int32(localDclCount); id++ {
+		name := br.readStringCPEntry()
+		ty := br.readType()
+		dcl := &bir.BIRLocalVariableDcl{}
+		dcl.Name = name
+		dcl.Type = ty
+		varMap[id] = dcl
 	}
 
 	basicBlockCount := br.readLength()
@@ -372,7 +389,7 @@ func (br *birReader) readFunction() *bir.BIRFunction {
 		block := br.readBasicBlock(varMap)
 		block.Number = j
 		basicBlocks[j] = *block
-		bbMap[block.Id.Value()] = &basicBlocks[j]
+		bbMap[block.ID.Value()] = &basicBlocks[j]
 	}
 
 	for j := range basicBlocks {
@@ -380,32 +397,32 @@ func (br *birReader) readFunction() *bir.BIRFunction {
 		if bb.Terminator != nil {
 			switch t := bb.Terminator.(type) {
 			case *bir.Goto:
-				if target, ok := bbMap[t.ThenBB.Id.Value()]; ok {
+				if target, ok := bbMap[t.ThenBB.ID.Value()]; ok {
 					t.ThenBB = target
 				}
 			case *bir.Branch:
-				if target, ok := bbMap[t.TrueBB.Id.Value()]; ok {
+				if target, ok := bbMap[t.TrueBB.ID.Value()]; ok {
 					t.TrueBB = target
 				}
-				if target, ok := bbMap[t.FalseBB.Id.Value()]; ok {
+				if target, ok := bbMap[t.FalseBB.ID.Value()]; ok {
 					t.FalseBB = target
 				}
 			case *bir.Call:
-				if target, ok := bbMap[t.ThenBB.Id.Value()]; ok {
+				if target, ok := bbMap[t.ThenBB.ID.Value()]; ok {
 					t.ThenBB = target
 				}
 			case *bir.Panic:
 				// Panic has no ThenBB
 			case *bir.LockStart:
-				if target, ok := bbMap[t.ThenBB.Id.Value()]; ok {
+				if target, ok := bbMap[t.ThenBB.ID.Value()]; ok {
 					t.ThenBB = target
 				}
 			case *bir.LockEnd:
-				if target, ok := bbMap[t.ThenBB.Id.Value()]; ok {
+				if target, ok := bbMap[t.ThenBB.ID.Value()]; ok {
 					t.ThenBB = target
 				}
 			case *bir.ResourceFunctionCall:
-				if target, ok := bbMap[t.ThenBB.Id.Value()]; ok {
+				if target, ok := bbMap[t.ThenBB.ID.Value()]; ok {
 					t.ThenBB = target
 				}
 			}
@@ -429,12 +446,13 @@ func (br *birReader) readFunction() *bir.BIRFunction {
 
 	var restParams *bir.BIRParameter
 	if hasRestParam {
-		paramStart := 1
-		if len(localVars) > 1 && localVars[1].GetName() == "self" {
-			paramStart = 2
-		}
+		paramStart := (&bir.BIRFunction{Flags: flag}).ParamLocalVarOffset()
 		restIdx := paramStart + len(requiredParams)
-		restParams = &bir.BIRParameter{Name: localVars[restIdx].GetName()}
+		restParams = &bir.BIRParameter{
+			Name:        localVars[restIdx].GetName(),
+			Flags:       restParamFlags,
+			Annotations: restParamAnnotations,
+		}
 	}
 
 	return &bir.BIRFunction{
@@ -455,7 +473,7 @@ func (br *birReader) readFunction() *bir.BIRFunction {
 	}
 }
 
-func (br *birReader) readLocalVar(varMap map[string]bir.BIRVariableDcl) *bir.BIRLocalVariableDcl {
+func (br *birReader) readLocalVar() *bir.BIRLocalVariableDcl {
 	_ = br.readKind()
 	ty := br.readType()
 	name := br.readStringCPEntry()
@@ -463,12 +481,10 @@ func (br *birReader) readLocalVar(varMap map[string]bir.BIRVariableDcl) *bir.BIR
 	localVar := &bir.BIRLocalVariableDcl{}
 	localVar.Name = name
 	localVar.Type = ty
-
-	varMap[name.Value()] = localVar
 	return localVar
 }
 
-func (br *birReader) readBasicBlock(varMap map[string]bir.BIRVariableDcl) *bir.BIRBasicBlock {
+func (br *birReader) readBasicBlock(varMap map[int32]*bir.BIRLocalVariableDcl) *bir.BIRBasicBlock {
 	id := br.readStringCPEntry()
 	instructionCount := br.readLength()
 
@@ -481,18 +497,18 @@ func (br *birReader) readBasicBlock(varMap map[string]bir.BIRVariableDcl) *bir.B
 	term := br.readTerminator(varMap)
 
 	return &bir.BIRBasicBlock{
-		Id:           id,
+		ID:           id,
 		Instructions: instructions,
 		Terminator:   term,
 	}
 }
 
-func (br *birReader) readInstruction(varMap map[string]bir.BIRVariableDcl) bir.BIRInstruction {
+func (br *birReader) readInstruction(varMap map[int32]*bir.BIRLocalVariableDcl) bir.BIRInstruction {
 	instructionKind := br.readInstructionKind()
 	pos := br.readPosition()
 
 	switch instructionKind {
-	case bir.INSTRUCTION_KIND_MOVE:
+	case bir.InstructionKindMove:
 		rhsOp := br.readOperand(varMap)
 		lhsOp := br.readOperand(varMap)
 		return &bir.Move{
@@ -502,17 +518,16 @@ func (br *birReader) readInstruction(varMap map[string]bir.BIRVariableDcl) bir.B
 			},
 			RhsOp: rhsOp,
 		}
-	case bir.INSTRUCTION_KIND_ADD, bir.INSTRUCTION_KIND_SUB, bir.INSTRUCTION_KIND_MUL,
-		bir.INSTRUCTION_KIND_DIV, bir.INSTRUCTION_KIND_MOD, bir.INSTRUCTION_KIND_EQUAL,
-		bir.INSTRUCTION_KIND_NOT_EQUAL, bir.INSTRUCTION_KIND_GREATER_THAN,
-		bir.INSTRUCTION_KIND_GREATER_EQUAL, bir.INSTRUCTION_KIND_LESS_THAN,
-		bir.INSTRUCTION_KIND_LESS_EQUAL, bir.INSTRUCTION_KIND_AND, bir.INSTRUCTION_KIND_OR,
-		bir.INSTRUCTION_KIND_REF_EQUAL, bir.INSTRUCTION_KIND_REF_NOT_EQUAL,
-		bir.INSTRUCTION_KIND_CLOSED_RANGE, bir.INSTRUCTION_KIND_HALF_OPEN_RANGE,
-		bir.INSTRUCTION_KIND_ANNOT_ACCESS, bir.INSTRUCTION_KIND_BITWISE_AND,
-		bir.INSTRUCTION_KIND_BITWISE_OR, bir.INSTRUCTION_KIND_BITWISE_XOR,
-		bir.INSTRUCTION_KIND_BITWISE_LEFT_SHIFT, bir.INSTRUCTION_KIND_BITWISE_RIGHT_SHIFT,
-		bir.INSTRUCTION_KIND_BITWISE_UNSIGNED_RIGHT_SHIFT:
+	case bir.InstructionKindAdd, bir.InstructionKindSub, bir.InstructionKindMul,
+		bir.InstructionKindDiv, bir.InstructionKindMod, bir.InstructionKindEqual,
+		bir.InstructionKindNotEqual, bir.InstructionKindGreaterThan,
+		bir.InstructionKindGreaterEqual, bir.InstructionKindLessThan,
+		bir.InstructionKindLessEqual, bir.InstructionKindAnd, bir.InstructionKindOr,
+		bir.InstructionKindRefEqual, bir.InstructionKindRefNotEqual,
+		bir.InstructionKindAnnotAccess, bir.InstructionKindBitwiseAnd,
+		bir.InstructionKindBitwiseOr, bir.InstructionKindBitwiseXor,
+		bir.InstructionKindBitwiseLeftShift, bir.InstructionKindBitwiseRightShift,
+		bir.InstructionKindBitwiseUnsignedRightShift:
 		rhsOp1 := br.readOperand(varMap)
 		rhsOp2 := br.readOperand(varMap)
 		lhsOp := br.readOperand(varMap)
@@ -525,8 +540,7 @@ func (br *birReader) readInstruction(varMap map[string]bir.BIRVariableDcl) bir.B
 			RhsOp1: *rhsOp1,
 			RhsOp2: *rhsOp2,
 		}
-	case bir.INSTRUCTION_KIND_TYPEOF, bir.INSTRUCTION_KIND_NOT, bir.INSTRUCTION_KIND_NEGATE,
-		bir.INSTRUCTION_KIND_BITWISE_COMPLEMENT:
+	case bir.InstructionKindNot, bir.InstructionKindNegate, bir.InstructionKindBitwiseComplement:
 		rhsOp := br.readOperand(varMap)
 		lhsOp := br.readOperand(varMap)
 		return &bir.UnaryOp{
@@ -537,7 +551,7 @@ func (br *birReader) readInstruction(varMap map[string]bir.BIRVariableDcl) bir.B
 			Kind:  instructionKind,
 			RhsOp: rhsOp,
 		}
-	case bir.INSTRUCTION_KIND_CONST_LOAD:
+	case bir.InstructionKindConstLoad:
 		// Const load type placeholder (not used — type inferred from value)
 		var constLoadTypeIdx int32
 		br.read(&constLoadTypeIdx)
@@ -562,20 +576,20 @@ func (br *birReader) readInstruction(varMap map[string]bir.BIRVariableDcl) bir.B
 			},
 			Value: value,
 		}
-	case bir.INSTRUCTION_KIND_MAP_STORE, bir.INSTRUCTION_KIND_MAP_LOAD,
-		bir.INSTRUCTION_KIND_ARRAY_STORE, bir.INSTRUCTION_KIND_ARRAY_LOAD,
-		bir.INSTRUCTION_KIND_ARRAY_FILLING_LOAD,
-		bir.INSTRUCTION_KIND_MAP_FILLING_LOAD,
-		bir.INSTRUCTION_KIND_OBJECT_STORE, bir.INSTRUCTION_KIND_OBJECT_LOAD:
+	case bir.InstructionKindMapStore, bir.InstructionKindMapLoad,
+		bir.InstructionKindArrayStore, bir.InstructionKindArrayLoad,
+		bir.InstructionKindArrayFillingLoad,
+		bir.InstructionKindMapFillingLoad,
+		bir.InstructionKindObjectStore, bir.InstructionKindObjectLoad:
 		lhsOp := br.readOperand(varMap)
 		keyOp := br.readOperand(varMap)
 		rhsOp := br.readOperand(varMap)
 		var filler values.FillerFactory
-		if instructionKind == bir.INSTRUCTION_KIND_MAP_FILLING_LOAD && lhsOp != nil && lhsOp.VariableDcl != nil {
+		if instructionKind == bir.InstructionKindMapFillingLoad && lhsOp != nil && lhsOp.VariableDcl != nil {
 			// After filling, the loaded value is guaranteed non-nil, so strip NIL
 			// from the operand type before looking up the filler factory.
 			tyCx := semtypes.TypeCheckContext(br.ctx.GetTypeEnv())
-			valueType := semtypes.Diff(lhsOp.VariableDcl.GetType(), semtypes.NIL)
+			valueType := semtypes.Diff(lhsOp.VariableDcl.GetType(), semtypes.Nil)
 			filler, _ = values.FillerFactoryFor(tyCx, valueType)
 		}
 		return &bir.FieldAccess{
@@ -588,7 +602,7 @@ func (br *birReader) readInstruction(varMap map[string]bir.BIRVariableDcl) bir.B
 			RhsOp:  rhsOp,
 			Filler: filler,
 		}
-	case bir.INSTRUCTION_KIND_NEW_ARRAY:
+	case bir.InstructionKindNewArray:
 		ty := br.readType()
 		lhsOp := br.readOperand(varMap)
 		sizeOp := br.readOperand(varMap)
@@ -610,7 +624,7 @@ func (br *birReader) readInstruction(varMap map[string]bir.BIRVariableDcl) bir.B
 			Filler:     br.restFillerFactoryForListType(ty),
 			IsReadonly: isReadonly,
 		}
-	case bir.INSTRUCTION_KIND_TYPE_CAST:
+	case bir.InstructionKindTypeCast:
 		lhsOp := br.readOperand(varMap)
 		rhsOp := br.readOperand(varMap)
 		ty := br.readType()
@@ -623,7 +637,7 @@ func (br *birReader) readInstruction(varMap map[string]bir.BIRVariableDcl) bir.B
 			RhsOp: rhsOp,
 			Type:  ty,
 		}
-	case bir.INSTRUCTION_KIND_TYPE_TEST:
+	case bir.InstructionKindTypeTest:
 		rhsOp := br.readOperand(varMap)
 		lhsOp := br.readOperand(varMap)
 		ty := br.readType()
@@ -638,7 +652,7 @@ func (br *birReader) readInstruction(varMap map[string]bir.BIRVariableDcl) bir.B
 			Type:       ty,
 			IsNegation: isNegation,
 		}
-	case bir.INSTRUCTION_KIND_NEW_STRUCTURE:
+	case bir.InstructionKindNewStructure:
 		ty := br.readType()
 		lhsOp := br.readOperand(varMap)
 		var isReadonly bool
@@ -673,7 +687,7 @@ func (br *birReader) readInstruction(varMap map[string]bir.BIRVariableDcl) bir.B
 			Defaults:   defaults,
 			IsReadonly: isReadonly,
 		}
-	case bir.INSTRUCTION_KIND_NEW_ERROR:
+	case bir.InstructionKindNewError:
 		ty := br.readType()
 		lhsOp := br.readOperand(varMap)
 		typeName := br.readStringCPEntry()
@@ -701,7 +715,7 @@ func (br *birReader) readInstruction(varMap map[string]bir.BIRVariableDcl) bir.B
 			CauseOp:   causeOp,
 			DetailOp:  detailOp,
 		}
-	case bir.INSTRUCTION_KIND_NEW_INSTANCE:
+	case bir.InstructionKindNewInstance:
 		classDefRef := br.readStringCPEntry()
 		lhsOp := br.readOperand(varMap)
 		return &bir.NewObject{
@@ -711,20 +725,20 @@ func (br *birReader) readInstruction(varMap map[string]bir.BIRVariableDcl) bir.B
 			},
 			ClassDefRef: classDefRef.Value(),
 		}
-	case bir.INSTRUCTION_KIND_NEW_STREAM:
+	case bir.InstructionKindNewStream:
 		streamTy := br.readType()
 		lhsOp := br.readOperand(varMap)
 		implOp := br.readOperand(varMap)
 		return bir.NewStreamConstructor(streamTy, lhsOp, implOp, pos)
-	case bir.INSTRUCTION_KIND_STREAM_NEXT:
+	case bir.InstructionKindStreamNext:
 		lhsOp := br.readOperand(varMap)
 		streamOp := br.readOperand(varMap)
 		return bir.NewStreamNext(lhsOp, streamOp, pos)
-	case bir.INSTRUCTION_KIND_STREAM_CLOSE:
+	case bir.InstructionKindStreamClose:
 		lhsOp := br.readOperand(varMap)
 		streamOp := br.readOperand(varMap)
 		return bir.NewStreamClose(lhsOp, streamOp, pos)
-	case bir.INSTRUCTION_KIND_FP_LOAD:
+	case bir.InstructionKindFPLoad:
 		functionLookupKey := br.readStringCPEntry()
 		ty := br.readType()
 		lhsOp := br.readOperand(varMap)
@@ -733,7 +747,7 @@ func (br *birReader) readInstruction(varMap map[string]bir.BIRVariableDcl) bir.B
 		fpLoad := bir.NewFPLoad(string(functionLookupKey), ty, lhsOp, pos)
 		fpLoad.IsClosure = isClosure
 		return fpLoad
-	case bir.INSTRUCTION_KIND_PUSH_SCOPE:
+	case bir.InstructionKindPushScope:
 		var numLocals int32
 		br.read(&numLocals)
 		return &bir.PushScopeFrame{
@@ -742,13 +756,13 @@ func (br *birReader) readInstruction(varMap map[string]bir.BIRVariableDcl) bir.B
 			},
 			NumLocals: int(numLocals),
 		}
-	case bir.INSTRUCTION_KIND_POP_SCOPE:
+	case bir.InstructionKindPopScope:
 		return &bir.PopScopeFrame{
 			BIRInstructionBase: bir.BIRInstructionBase{
 				BIRNodeBase: bir.BIRNodeBase{Pos: pos},
 			},
 		}
-	case bir.INSTRUCTION_KIND_NEW_XML_ELEMENT:
+	case bir.InstructionKindNewXMLElement:
 		nameOp := br.readOperand(varMap)
 		var hasChildren bool
 		br.read(&hasChildren)
@@ -770,20 +784,20 @@ func (br *birReader) readInstruction(varMap map[string]bir.BIRVariableDcl) bir.B
 		}
 		lhsOp := br.readOperand(varMap)
 		return bir.NewXMLElementInstr(lhsOp, nameOp, childrenOp, attrsOp, namespacesOp, pos)
-	case bir.INSTRUCTION_KIND_NEW_XML_PI:
+	case bir.InstructionKindNewXMLPI:
 		targetOp := br.readOperand(varMap)
 		dataOp := br.readOperand(varMap)
 		lhsOp := br.readOperand(varMap)
 		return bir.NewXMLPIInstr(lhsOp, targetOp, dataOp, pos)
-	case bir.INSTRUCTION_KIND_NEW_XML_COMMENT:
+	case bir.InstructionKindNewXMLComment:
 		bodyOp := br.readOperand(varMap)
 		lhsOp := br.readOperand(varMap)
 		return bir.NewXMLCommentInstr(lhsOp, bodyOp, pos)
-	case bir.INSTRUCTION_KIND_NEW_XML_TEXT:
+	case bir.InstructionKindNewXMLText:
 		bodyOp := br.readOperand(varMap)
 		lhsOp := br.readOperand(varMap)
 		return bir.NewXMLTextInstr(lhsOp, bodyOp, pos)
-	case bir.INSTRUCTION_KIND_NEW_XML_SEQUENCE:
+	case bir.InstructionKindNewXMLSequence:
 		count := br.readLength()
 		children := make([]*bir.BIROperand, count)
 		for k := 0; k < int(count); k++ {
@@ -791,7 +805,7 @@ func (br *birReader) readInstruction(varMap map[string]bir.BIRVariableDcl) bir.B
 		}
 		lhsOp := br.readOperand(varMap)
 		return bir.NewXMLSequenceInstr(lhsOp, children, pos)
-	case bir.INSTRUCTION_KIND_EVAL_TEMPLATE_EXPR:
+	case bir.InstructionKindEvalTemplateExpr:
 		var kind uint8
 		br.read(&kind)
 		strCount := br.readLength()
@@ -813,7 +827,7 @@ func (br *birReader) readInstruction(varMap map[string]bir.BIRVariableDcl) bir.B
 	}
 }
 
-func (br *birReader) readTerminator(varMap map[string]bir.BIRVariableDcl) bir.BIRTerminator {
+func (br *birReader) readTerminator(varMap map[int32]*bir.BIRLocalVariableDcl) bir.BIRTerminator {
 	var terminatorKind uint8
 	br.read(&terminatorKind)
 
@@ -825,7 +839,7 @@ func (br *birReader) readTerminator(varMap map[string]bir.BIRVariableDcl) bir.BI
 	pos := br.readPosition()
 
 	switch termInstructionKind {
-	case bir.INSTRUCTION_KIND_RETURN:
+	case bir.InstructionKindReturn:
 		return &bir.Return{
 			BIRTerminatorBase: bir.BIRTerminatorBase{
 				BIRInstructionBase: bir.BIRInstructionBase{
@@ -834,7 +848,7 @@ func (br *birReader) readTerminator(varMap map[string]bir.BIRVariableDcl) bir.BI
 			},
 		}
 
-	case bir.INSTRUCTION_KIND_GOTO:
+	case bir.InstructionKindGoto:
 		id := br.readStringCPEntry()
 		return &bir.Goto{
 			BIRTerminatorBase: bir.BIRTerminatorBase{
@@ -842,11 +856,11 @@ func (br *birReader) readTerminator(varMap map[string]bir.BIRVariableDcl) bir.BI
 					BIRNodeBase: bir.BIRNodeBase{Pos: pos},
 				},
 				ThenBB: &bir.BIRBasicBlock{
-					Id: id,
+					ID: id,
 				},
 			},
 		}
-	case bir.INSTRUCTION_KIND_BRANCH:
+	case bir.InstructionKindBranch:
 		op := br.readOperand(varMap)
 		trueBBId := br.readStringCPEntry()
 		falseBBId := br.readStringCPEntry()
@@ -859,13 +873,13 @@ func (br *birReader) readTerminator(varMap map[string]bir.BIRVariableDcl) bir.BI
 			},
 			Op: op,
 			TrueBB: &bir.BIRBasicBlock{
-				Id: trueBBId,
+				ID: trueBBId,
 			},
 			FalseBB: &bir.BIRBasicBlock{
-				Id: falseBBId,
+				ID: falseBBId,
 			},
 		}
-	case bir.INSTRUCTION_KIND_CALL, bir.INSTRUCTION_KIND_FP_CALL:
+	case bir.InstructionKindCall, bir.InstructionKindFPCall:
 		var isMethodCall bool
 		br.read(&isMethodCall)
 
@@ -891,7 +905,7 @@ func (br *birReader) readTerminator(varMap map[string]bir.BIRVariableDcl) bir.BI
 		thenBBId := br.readStringCPEntry()
 
 		var fpOperand *bir.BIROperand
-		if termInstructionKind == bir.INSTRUCTION_KIND_FP_CALL {
+		if termInstructionKind == bir.InstructionKindFPCall {
 			fpOperand = br.readOperand(varMap)
 		}
 
@@ -905,7 +919,7 @@ func (br *birReader) readTerminator(varMap map[string]bir.BIRVariableDcl) bir.BI
 			FpOperand:         fpOperand,
 			BIRTerminatorBase: bir.BIRTerminatorBase{
 				ThenBB: &bir.BIRBasicBlock{
-					Id: thenBBId,
+					ID: thenBBId,
 				},
 				BIRInstructionBase: bir.BIRInstructionBase{
 					BIRNodeBase: bir.BIRNodeBase{Pos: pos},
@@ -913,7 +927,7 @@ func (br *birReader) readTerminator(varMap map[string]bir.BIRVariableDcl) bir.BI
 				},
 			},
 		}
-	case bir.INSTRUCTION_KIND_PANIC:
+	case bir.InstructionKindPanic:
 		errorOp := br.readOperand(varMap)
 		return &bir.Panic{
 			BIRTerminatorBase: bir.BIRTerminatorBase{
@@ -923,7 +937,7 @@ func (br *birReader) readTerminator(varMap map[string]bir.BIRVariableDcl) bir.BI
 			},
 			ErrorOp: errorOp,
 		}
-	case bir.INSTRUCTION_KIND_LOCK:
+	case bir.InstructionKindLock:
 		key := br.readStringCPEntry()
 		thenBBId := br.readStringCPEntry()
 		return &bir.LockStart{
@@ -931,11 +945,11 @@ func (br *birReader) readTerminator(varMap map[string]bir.BIRVariableDcl) bir.BI
 				BIRInstructionBase: bir.BIRInstructionBase{
 					BIRNodeBase: bir.BIRNodeBase{Pos: pos},
 				},
-				ThenBB: &bir.BIRBasicBlock{Id: thenBBId},
+				ThenBB: &bir.BIRBasicBlock{ID: thenBBId},
 			},
 			LockKey: string(key),
 		}
-	case bir.INSTRUCTION_KIND_RESOURCE_CALL:
+	case bir.InstructionKindResourceCall:
 		receiver := br.readOperand(varMap)
 		methodNameN := br.readStringCPEntry()
 		methodName := methodNameN.Value()
@@ -962,14 +976,14 @@ func (br *birReader) readTerminator(varMap map[string]bir.BIRVariableDcl) bir.BI
 					BIRNodeBase: bir.BIRNodeBase{Pos: pos},
 					LhsOp:       lhsOp,
 				},
-				ThenBB: &bir.BIRBasicBlock{Id: thenBBId},
+				ThenBB: &bir.BIRBasicBlock{ID: thenBBId},
 			},
 			Receiver:     *receiver,
 			MethodName:   methodName,
 			PathSegments: pathSegments,
 			Args:         args,
 		}
-	case bir.INSTRUCTION_KIND_UNLOCK:
+	case bir.InstructionKindUnlock:
 		key := br.readStringCPEntry()
 		thenBBId := br.readStringCPEntry()
 		return &bir.LockEnd{
@@ -977,7 +991,7 @@ func (br *birReader) readTerminator(varMap map[string]bir.BIRVariableDcl) bir.BI
 				BIRInstructionBase: bir.BIRInstructionBase{
 					BIRNodeBase: bir.BIRNodeBase{Pos: pos},
 				},
-				ThenBB: &bir.BIRBasicBlock{Id: thenBBId},
+				ThenBB: &bir.BIRBasicBlock{ID: thenBBId},
 			},
 			LockKey: string(key),
 		}
@@ -986,7 +1000,7 @@ func (br *birReader) readTerminator(varMap map[string]bir.BIRVariableDcl) bir.BI
 	}
 }
 
-func (br *birReader) readOperand(varMap map[string]bir.BIRVariableDcl) *bir.BIROperand {
+func (br *birReader) readOperand(varMap map[int32]*bir.BIRLocalVariableDcl) *bir.BIROperand {
 	var ignoreVariable bool
 	br.read(&ignoreVariable)
 
@@ -1001,24 +1015,23 @@ func (br *birReader) readOperand(varMap map[string]bir.BIRVariableDcl) *bir.BIRO
 
 	kind := br.readKind()
 	_ = br.readScope() // scope (ignored)
-	name := br.readStringCPEntry()
-
-	if kind == bir.VAR_KIND_GLOBAL {
+	if kind == bir.VarKindGlobal {
+		name := br.readStringCPEntry()
 		lookupKey := br.readStringCPEntry()
 		pkgId := br.readPackageCPEntry()
 		gv := &bir.BIRGlobalVariableDcl{
 			GlobalVarLookupKey: string(lookupKey),
 		}
 		gv.Name = name
-		gv.PkgId = pkgId
+		gv.PkgID = pkgId
 		return &bir.BIROperand{VariableDcl: gv}
 	}
 
-	varDcl, ok := varMap[name.Value()]
+	var dclID int32
+	br.read(&dclID)
+	varDcl, ok := varMap[dclID]
 	if !ok {
-		varDcl = &bir.BIRLocalVariableDcl{}
-		varDcl.(*bir.BIRLocalVariableDcl).SetName(name)
-		varMap[name.Value()] = varDcl
+		panic(fmt.Sprintf("local variable declaration not found: %d", dclID))
 	}
 
 	var mode uint8
@@ -1043,6 +1056,16 @@ func (br *birReader) readConstValue() any {
 
 	tag := typeTag(tagByte)
 	return br.readConstValueByTag(tag)
+}
+
+func (br *birReader) readAnnotationValues() values.AnnotationValues {
+	count := br.readLength()
+	annotations := values.NewAnnotationValues()
+	for range count {
+		key := string(br.readStringCPEntry())
+		annotations[key] = br.readConstValue()
+	}
+	return annotations
 }
 
 func (br *birReader) readConstValueByTag(tag typeTag) any {
@@ -1115,7 +1138,7 @@ func (br *birReader) readConstValueByTag(tag typeTag) any {
 			initial[i] = br.readConstValue()
 		}
 		tyCtx := semtypes.TypeCheckContext(br.ctx.GetTypeEnv())
-		atomic := semtypes.ToListAtomicType(tyCtx, ty)
+		atomic := semtypes.ToListAtomicType(tyCtx.Env(), ty)
 		if atomic == nil {
 			panic("list constant type is not atomic")
 		}
@@ -1153,7 +1176,7 @@ func (br *birReader) restFillerFactoryForListType(ty semtypes.SemType) values.Fi
 		return nil
 	}
 	tyCx := semtypes.TypeCheckContext(br.ctx.GetTypeEnv())
-	lat := semtypes.ToListAtomicType(tyCx, ty)
+	lat := semtypes.ToListAtomicType(tyCx.Env(), ty)
 	if lat == nil {
 		return nil
 	}

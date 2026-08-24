@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"ballerina-lang-go/ls/protocol"
+	"github.com/ballerina-nutcracker/ballerina/ls/protocol"
 )
 
 // defaultMetamodelPath returns a plausible external location for the LSP 3.18

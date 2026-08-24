@@ -19,8 +19,8 @@ package projects
 import (
 	"sync"
 
-	"ballerina-lang-go/context"
-	"ballerina-lang-go/tools/diagnostics"
+	"github.com/ballerina-nutcracker/ballerina/context"
+	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
 )
 
 // PackageCompilation represents compilation at package level by resolving all the dependencies.
@@ -66,8 +66,6 @@ func (c *PackageCompilation) compile() {
 // compileModulesInternal performs the actual compilation of all modules.
 func (c *PackageCompilation) compileModulesInternal() {
 	de := c.compilerEnv.DiagnosticEnv()
-	inst := de.BeginCompile()
-	defer de.EndCompile(inst)
 
 	var allDiagnostics []diagnostics.Diagnostic
 

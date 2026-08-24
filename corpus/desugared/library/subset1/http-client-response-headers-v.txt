@@ -15,65 +15,53 @@
           (invocation $default$15 (
             (simple-var-ref $desugar$0))))))
       (var-def
-        (variable $desugar$2 (expr
-          (new (
-            (simple-var-ref $desugar$0)
-            (simple-var-ref $desugar$1))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$2))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$2))) ())
-      (var-def
         (variable c (type
           (user-defined-type http Client)) (expr
-          (simple-var-ref $desugar$2))))
+          (checked-expr
+            (new (
+              (simple-var-ref $desugar$0)
+              (simple-var-ref $desugar$1)))))))
       (var-def
-        (variable $desugar$3 (expr
+        (variable $desugar$2 (expr
           (literal /path))))
       (var-def
-        (variable $desugar$4 (expr
+        (variable $desugar$3 (expr
           (invocation $default$21 (
-            (simple-var-ref $desugar$3))))))
+            (simple-var-ref $desugar$2))))))
       (var-def
-        (variable $desugar$5 (expr
-          (remote-method-call get expr:
-            (simple-var-ref c) (
-            (simple-var-ref $desugar$3)
-            (simple-var-ref $desugar$4))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$5))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$5))) ())
+        (variable $desugar$4 (expr
+          (typedesc-expr))))
       (var-def
         (variable r (type
           (user-defined-type http Response)) (expr
-          (simple-var-ref $desugar$5))))
+          (checked-expr
+            (remote-method-call get expr:
+              (simple-var-ref c) (
+              (simple-var-ref $desugar$2)
+              (simple-var-ref $desugar$3)
+              (simple-var-ref $desugar$4)))))))
       (var-def
-        (variable $desugar$6 (expr
+        (variable $desugar$5 (expr
           (literal x-absent))))
       (var-def
-        (variable $desugar$7 (expr
+        (variable $desugar$6 (expr
           (invocation $default$4 (
-            (simple-var-ref $desugar$6))))))
+            (simple-var-ref $desugar$5))))))
       (expression-stmt
         (invocation io println (
           (invocation hasHeader expr:
             (simple-var-ref r) (
-            (simple-var-ref $desugar$6)
-            (simple-var-ref $desugar$7))))))
+            (simple-var-ref $desugar$5)
+            (simple-var-ref $desugar$6))))))
       (var-def
-        (variable $desugar$8 (expr
+        (variable $desugar$7 (expr
           (invocation $default$2 ()))))
       (expression-stmt
         (invocation io println (
           (invocation lang.array length (
             (invocation getHeaderNames expr:
               (simple-var-ref r) (
-              (simple-var-ref $desugar$8))))))))
+              (simple-var-ref $desugar$7))))))))
       (expression-stmt
         (invocation io println (
           (invocation hasHeader expr:

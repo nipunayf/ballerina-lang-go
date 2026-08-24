@@ -17,7 +17,7 @@
 package semtypes
 
 import (
-	"ballerina-lang-go/decimal"
+	"github.com/ballerina-nutcracker/ballerina/decimal"
 )
 
 type enumerableDecimal struct {

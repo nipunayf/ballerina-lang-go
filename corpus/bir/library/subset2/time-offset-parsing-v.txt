@@ -1,226 +1,228 @@
 module $anon.. v 0.0.0;
 main() -> nil|error{
   bb0 {
-    %1 = newObject ballerina/time:TimeZone
-    %2 = ConstantLoad +0530
-    %3 = init(%1,%2) -> bb1;
+    %2 = newObject ballerina/time:TimeZone
+    %3 = ConstantLoad +0530
+    %4 = init(%2,%3) -> bb1;
   }
   bb1 {
-    %5 = %3 is nil
-    %5 ? bb2 : bb3;
+    %6 = %4 is nil
+    %6 ? bb2 : bb3;
   }
   bb2 {
-    %4 = %1;
+    %5 = %2;
     GOTO bb4;
   }
   bb3 {
-    %4 = %3;
+    %5 = %4;
     GOTO bb4;
   }
   bb4 {
-    $desugar$0 = %4;
-    %7 = $desugar$0 is error
+    %7 = %5 is error
     %7 ? bb5 : bb6;
   }
   bb5 {
-    PushScopeFrame 0
-    (1, %0) = (1, $desugar$0);
-    PopScopeFrame
+    %0 = %5;
     return;
   }
   bb6 {
-    east = $desugar$0;
-    %9 = fixedOffset(east) -> bb7;
+    %1 = %5;
+    GOTO bb7;
   }
   bb7 {
-    eastOffset = %9;
-    %11 = eastOffset !is nil
-    %11 ? bb8 : bb11;
+    east = %1;
+    %9 = fixedOffset(east) -> bb8;
   }
   bb8 {
+    eastOffset = %9;
+    %11 = eastOffset !is nil
+    %11 ? bb9 : bb12;
+  }
+  bb9 {
     PushScopeFrame 8
     %1 = ConstantLoad hours
     %0 = (1, eastOffset)[%1];
     %2 = %0;
-    %3 = println(%2) -> bb9;
+    %3 = println(%2) -> bb10;
   }
-  bb9 {
+  bb10 {
     %5 = ConstantLoad minutes
     %4 = (1, eastOffset)[%5];
     %6 = %4;
-    %7 = println(%6) -> bb10;
-  }
-  bb10 {
-    PopScopeFrame
-    GOTO bb11;
+    %7 = println(%6) -> bb11;
   }
   bb11 {
-    PushScopeFrame 11
-    %0 = newObject ballerina/time:TimeZone
-    %1 = ConstantLoad -0800
-    %2 = init(%0,%1) -> bb12;
+    PopScopeFrame
+    GOTO bb12;
   }
   bb12 {
-    %4 = %2 is nil
-    %4 ? bb13 : bb14;
+    PushScopeFrame 11
+    %1 = newObject ballerina/time:TimeZone
+    %2 = ConstantLoad -0800
+    %3 = init(%1,%2) -> bb13;
   }
   bb13 {
-    %3 = %0;
-    GOTO bb15;
+    %5 = %3 is nil
+    %5 ? bb14 : bb15;
   }
   bb14 {
-    %3 = %2;
-    GOTO bb15;
+    %4 = %1;
+    GOTO bb16;
   }
   bb15 {
-    $desugar$1 = %3;
-    %6 = $desugar$1 is error
-    %6 ? bb16 : bb17;
+    %4 = %3;
+    GOTO bb16;
   }
   bb16 {
-    PushScopeFrame 0
-    (2, %0) = (1, $desugar$1);
-    PopScopeFrame
+    %6 = %4 is error
+    %6 ? bb17 : bb18;
+  }
+  bb17 {
+    (1, %0) = %4;
     PopScopeFrame
     return;
   }
-  bb17 {
-    west = $desugar$1;
-    %8 = fixedOffset(west) -> bb18;
-  }
   bb18 {
-    westOffset = %8;
-    %10 = westOffset !is nil
-    %10 ? bb19 : bb21;
+    %0 = %4;
+    GOTO bb19;
   }
   bb19 {
+    west = %0;
+    %8 = fixedOffset(west) -> bb20;
+  }
+  bb20 {
+    westOffset = %8;
+    %10 = westOffset !is nil
+    %10 ? bb21 : bb23;
+  }
+  bb21 {
     PushScopeFrame 4
     %1 = ConstantLoad hours
     %0 = (1, westOffset)[%1];
     %2 = %0;
-    %3 = println(%2) -> bb20;
+    %3 = println(%2) -> bb22;
   }
-  bb20 {
+  bb22 {
     PopScopeFrame
-    GOTO bb21;
+    GOTO bb23;
   }
-  bb21 {
+  bb23 {
     PushScopeFrame 127
     %0 = newObject ballerina/time:TimeZone
     %1 = ConstantLoad +12:99
-    %2 = init(%0,%1) -> bb22;
-  }
-  bb22 {
-    %4 = %2 is nil
-    %4 ? bb23 : bb24;
-  }
-  bb23 {
-    %3 = %0;
-    GOTO bb25;
+    %2 = init(%0,%1) -> bb24;
   }
   bb24 {
-    %3 = %2;
-    GOTO bb25;
+    %4 = %2 is nil
+    %4 ? bb25 : bb26;
   }
   bb25 {
+    %3 = %0;
+    GOTO bb27;
+  }
+  bb26 {
+    %3 = %2;
+    GOTO bb27;
+  }
+  bb27 {
     badMin = %3;
     %6 = badMin is error
     %7 = %6;
-    %8 = println(%7) -> bb26;
-  }
-  bb26 {
-    %9 = newObject ballerina/time:TimeZone
-    %10 = ConstantLoad +2400
-    %11 = init(%9,%10) -> bb27;
-  }
-  bb27 {
-    %13 = %11 is nil
-    %13 ? bb28 : bb29;
+    %8 = println(%7) -> bb28;
   }
   bb28 {
-    %12 = %9;
-    GOTO bb30;
+    %9 = newObject ballerina/time:TimeZone
+    %10 = ConstantLoad +2400
+    %11 = init(%9,%10) -> bb29;
   }
   bb29 {
-    %12 = %11;
-    GOTO bb30;
+    %13 = %11 is nil
+    %13 ? bb30 : bb31;
   }
   bb30 {
+    %12 = %9;
+    GOTO bb32;
+  }
+  bb31 {
+    %12 = %11;
+    GOTO bb32;
+  }
+  bb32 {
     badHour = %12;
     %15 = badHour is error
     %16 = %15;
-    %17 = println(%16) -> bb31;
-  }
-  bb31 {
-    %18 = newObject ballerina/time:TimeZone
-    %19 = ConstantLoad +1a:30
-    %20 = init(%18,%19) -> bb32;
-  }
-  bb32 {
-    %22 = %20 is nil
-    %22 ? bb33 : bb34;
+    %17 = println(%16) -> bb33;
   }
   bb33 {
-    %21 = %18;
-    GOTO bb35;
+    %18 = newObject ballerina/time:TimeZone
+    %19 = ConstantLoad +1a:30
+    %20 = init(%18,%19) -> bb34;
   }
   bb34 {
-    %21 = %20;
-    GOTO bb35;
+    %22 = %20 is nil
+    %22 ? bb35 : bb36;
   }
   bb35 {
+    %21 = %18;
+    GOTO bb37;
+  }
+  bb36 {
+    %21 = %20;
+    GOTO bb37;
+  }
+  bb37 {
     bad1 = %21;
     %24 = bad1 is error
     %25 = %24;
-    %26 = println(%25) -> bb36;
-  }
-  bb36 {
-    %27 = newObject ballerina/time:TimeZone
-    %28 = ConstantLoad +12:a0
-    %29 = init(%27,%28) -> bb37;
-  }
-  bb37 {
-    %31 = %29 is nil
-    %31 ? bb38 : bb39;
+    %26 = println(%25) -> bb38;
   }
   bb38 {
-    %30 = %27;
-    GOTO bb40;
+    %27 = newObject ballerina/time:TimeZone
+    %28 = ConstantLoad +12:a0
+    %29 = init(%27,%28) -> bb39;
   }
   bb39 {
-    %30 = %29;
-    GOTO bb40;
+    %31 = %29 is nil
+    %31 ? bb40 : bb41;
   }
   bb40 {
+    %30 = %27;
+    GOTO bb42;
+  }
+  bb41 {
+    %30 = %29;
+    GOTO bb42;
+  }
+  bb42 {
     bad2 = %30;
     %33 = bad2 is error
     %34 = %33;
-    %35 = println(%34) -> bb41;
-  }
-  bb41 {
-    %36 = newObject ballerina/time:TimeZone
-    %37 = ConstantLoad +12a0
-    %38 = init(%36,%37) -> bb42;
-  }
-  bb42 {
-    %40 = %38 is nil
-    %40 ? bb43 : bb44;
+    %35 = println(%34) -> bb43;
   }
   bb43 {
-    %39 = %36;
-    GOTO bb45;
+    %36 = newObject ballerina/time:TimeZone
+    %37 = ConstantLoad +12a0
+    %38 = init(%36,%37) -> bb44;
   }
   bb44 {
-    %39 = %38;
-    GOTO bb45;
+    %40 = %38 is nil
+    %40 ? bb45 : bb46;
   }
   bb45 {
+    %39 = %36;
+    GOTO bb47;
+  }
+  bb46 {
+    %39 = %38;
+    GOTO bb47;
+  }
+  bb47 {
     bad3 = %39;
     %42 = bad3 is error
     %43 = %42;
-    %44 = println(%43) -> bb46;
+    %44 = println(%43) -> bb48;
   }
-  bb46 {
+  bb48 {
     %45 = ConstantLoad year
     %46 = ConstantLoad 2021
     %47 = ConstantLoad month
@@ -236,15 +238,15 @@ main() -> nil|error{
     %57 = ConstantLoad timeAbbrev
     %58 = ConstantLoad +12:99
     %59 = newMap {| day: int, dayOfWeek: 0|1|2|3|4|5|6, hour: int, minute: int, month: int, second: decimal, timeAbbrev: string, utcOffset: {| hours: int, minutes: int, seconds: decimal, never... |}, which: 0|1, year: int, anydata... |}{%45=%46, %47=%48, %49=%50, %51=%52, %53=%54, %55=%56, %57=%58}
-    %60 = civilToString(%59) -> bb47;
+    %60 = civilToString(%59) -> bb49;
   }
-  bb47 {
+  bb49 {
     badAbbrev = %60;
     %62 = badAbbrev is error
     %63 = %62;
-    %64 = println(%63) -> bb48;
+    %64 = println(%63) -> bb50;
   }
-  bb48 {
+  bb50 {
     %65 = ConstantLoad year
     %66 = ConstantLoad 2021
     %67 = ConstantLoad month
@@ -260,15 +262,15 @@ main() -> nil|error{
     %77 = ConstantLoad timeAbbrev
     %78 = ConstantLoad Bogus/Zone
     %79 = newMap {| day: int, dayOfWeek: 0|1|2|3|4|5|6, hour: int, minute: int, month: int, second: decimal, timeAbbrev: string, utcOffset: {| hours: int, minutes: int, seconds: decimal, never... |}, which: 0|1, year: int, anydata... |}{%65=%66, %67=%68, %69=%70, %71=%72, %73=%74, %75=%76, %77=%78}
-    %80 = civilToString(%79) -> bb49;
+    %80 = civilToString(%79) -> bb51;
   }
-  bb49 {
+  bb51 {
     unknownZone = %80;
     %82 = unknownZone is error
     %83 = %82;
-    %84 = println(%83) -> bb50;
+    %84 = println(%83) -> bb52;
   }
-  bb50 {
+  bb52 {
     %85 = ConstantLoad year
     %86 = ConstantLoad 2021
     %87 = ConstantLoad month
@@ -288,48 +290,49 @@ main() -> nil|error{
     %101 = ConstantLoad 30
     %102 = newMap {| hours: int, minutes: int, seconds: decimal, never... |}{%98=%99, %100=%101} defaults{minutes=ballerina/time:$desugar$0}
     %103 = newMap {| day: int, dayOfWeek: 0|1|2|3|4|5|6, hour: int, minute: int, month: int, second: decimal, timeAbbrev: string, utcOffset: {| hours: int, minutes: int, seconds: decimal, never... |}, which: 0|1, year: int, anydata... |}{%85=%86, %87=%88, %89=%90, %91=%92, %93=%94, %95=%96, %97=%102}
-    %104 = utcFromCivil(%103) -> bb51;
+    %104 = utcFromCivil(%103) -> bb53;
   }
-  bb51 {
+  bb53 {
     badDate = %104;
     %106 = badDate is error
     %107 = %106;
-    %108 = println(%107) -> bb52;
-  }
-  bb52 {
-    %109 = ConstantLoad year
-    %110 = ConstantLoad 2021
-    %111 = ConstantLoad month
-    %112 = ConstantLoad 4
-    %113 = ConstantLoad day
-    %114 = ConstantLoad 12
-    %115 = ConstantLoad hour
-    %116 = ConstantLoad 23
-    %117 = ConstantLoad minute
-    %118 = ConstantLoad 20
-    %119 = ConstantLoad timeAbbrev
-    %120 = ConstantLoad +05:30
-    %121 = newMap {| day: int, dayOfWeek: 0|1|2|3|4|5|6, hour: int, minute: int, month: int, second: decimal, timeAbbrev: string, utcOffset: {| hours: int, minutes: int, seconds: decimal, never... |}, which: 0|1, year: int, anydata... |}{%109=%110, %111=%112, %113=%114, %115=%116, %117=%118, %119=%120}
-    %122 = civilToString(%121) -> bb53;
-  }
-  bb53 {
-    $desugar$2 = %122;
-    %124 = $desugar$2 is error
-    %124 ? bb54 : bb55;
+    %108 = println(%107) -> bb54;
   }
   bb54 {
-    PushScopeFrame 0
-    (3, %0) = (1, $desugar$2);
-    PopScopeFrame
+    %110 = ConstantLoad year
+    %111 = ConstantLoad 2021
+    %112 = ConstantLoad month
+    %113 = ConstantLoad 4
+    %114 = ConstantLoad day
+    %115 = ConstantLoad 12
+    %116 = ConstantLoad hour
+    %117 = ConstantLoad 23
+    %118 = ConstantLoad minute
+    %119 = ConstantLoad 20
+    %120 = ConstantLoad timeAbbrev
+    %121 = ConstantLoad +05:30
+    %122 = newMap {| day: int, dayOfWeek: 0|1|2|3|4|5|6, hour: int, minute: int, month: int, second: decimal, timeAbbrev: string, utcOffset: {| hours: int, minutes: int, seconds: decimal, never... |}, which: 0|1, year: int, anydata... |}{%110=%111, %112=%113, %114=%115, %116=%117, %118=%119, %120=%121}
+    %123 = civilToString(%122) -> bb55;
+  }
+  bb55 {
+    %124 = %123 is error
+    %124 ? bb56 : bb57;
+  }
+  bb56 {
+    (2, %0) = %123;
     PopScopeFrame
     PopScopeFrame
     return;
   }
-  bb55 {
-    noSec = $desugar$2;
-    %126 = println(noSec) -> bb56;
+  bb57 {
+    %109 = %123;
+    GOTO bb58;
   }
-  bb56 {
+  bb58 {
+    noSec = %109;
+    %126 = println(noSec) -> bb59;
+  }
+  bb59 {
     PopScopeFrame
     PopScopeFrame
     return;

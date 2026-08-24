@@ -22,7 +22,7 @@ import (
 	"io"
 	"strings"
 
-	"ballerina-lang-go/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
 )
 
 const xmlNamespaceURI = "http://www.w3.org/XML/1998/namespace"
@@ -70,7 +70,7 @@ type xmlBuildCtx struct {
 
 func newXMLBuildCtx(tc semtypes.Context, mode XMLParseMode) *xmlBuildCtx {
 	md := semtypes.NewMappingDefinition()
-	stringMapTy := md.DefineMappingTypeWrapped(tc.Env(), nil, semtypes.STRING)
+	stringMapTy := md.Define(tc.Env(), nil, semtypes.String)
 	return &xmlBuildCtx{
 		stringMapTy:     stringMapTy,
 		stringMapAtomic: semtypes.ToMappingAtomicType(tc, stringMapTy),

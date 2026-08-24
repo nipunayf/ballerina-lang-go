@@ -50,7 +50,8 @@
       (return
         (literal 0))))
   (function $default$1 (
-    (variable x)) ()
+    (variable x (type
+      (value-type )))) ()
     (block-function-body
       (return
         (literal 1)))))

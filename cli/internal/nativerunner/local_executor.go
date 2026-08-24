@@ -19,7 +19,6 @@
 package nativerunner
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -32,7 +31,7 @@ import (
 	"strconv"
 	"strings"
 
-	"ballerina-lang-go/cli/internal/nativeexec"
+	"github.com/ballerina-nutcracker/ballerina/cli/internal/nativeexec"
 )
 
 const (
@@ -40,25 +39,38 @@ const (
 	MinGoVersion = "1.26"
 )
 
+// defaultTargetPackage is the full bal CLI, matching bal run's re-exec use case.
+const defaultTargetPackage = "cli/cmd"
+
 // LocalExecutor builds a custom interpreter binary using the local Go toolchain.
 // It implements nativeexec.NativeExecutor.
 type LocalExecutor struct {
-	// interpreterRoot is the directory that contains the ballerina-lang-go go.mod.
+	// interpreterRoot is the directory that contains the interpreter go.work.
 	interpreterRoot string
 	// outputBinary is the path where the compiled native binary is written.
 	// Relative paths are resolved against the interpreter root.
 	outputBinary string
+	// targetPackage is the Go import path go build compiles, relative to
+	// interpreterRoot — e.g. "cli/cmd" (bal run) or "cli/internal/balrt" (bal build).
+	targetPackage string
 }
 
 var _ nativeexec.NativeExecutor = (*LocalExecutor)(nil)
 
-// New creates a LocalExecutor. interpreterRoot is the directory containing the
-// ballerina-lang-go go.mod; outputBinary is the destination path for the
-// compiled native interpreter (typically <project>/target/bin/bal).
+// New creates a LocalExecutor targeting the full bal CLI (cli/cmd) — bal
+// run's use case, where the rebuilt binary re-execs and takes over the process.
 func New(interpreterRoot, outputBinary string) *LocalExecutor {
+	return NewForTarget(interpreterRoot, outputBinary, defaultTargetPackage)
+}
+
+// NewForTarget creates a LocalExecutor targeting an arbitrary Go package
+// instead of the full CLI — e.g. bal build uses "cli/internal/balrt" for a slim
+// stub with native code woven in.
+func NewForTarget(interpreterRoot, outputBinary, targetPackage string) *LocalExecutor {
 	return &LocalExecutor{
 		interpreterRoot: interpreterRoot,
 		outputBinary:    outputBinary,
+		targetPackage:   targetPackage,
 	}
 }
 
@@ -72,7 +84,7 @@ func (e *LocalExecutor) Available() bool {
 	if !goVersionAtLeast(goExe, MinGoVersion) {
 		return false
 	}
-	_, err = os.Stat(filepath.Join(e.interpreterRoot, "go.mod"))
+	_, err = os.Stat(filepath.Join(e.interpreterRoot, "go.work"))
 	return err == nil
 }
 
@@ -122,43 +134,84 @@ func versionAtLeast(a, b string) bool {
 	return true
 }
 
-// Prepare builds a custom interpreter that embeds all req.Payloads' native Go
-// sources and returns a Runner that re-executes the program via that binary.
-// If a previously built binary with a matching fingerprint already exists at
-// outputBinary, it is reused without rebuilding.
+// Prepare builds an interpreter embedding req.Payloads and returns a Runner
+// to re-execute via it, reusing a matching-fingerprint binary if one exists.
 func (e *LocalExecutor) Prepare(ctx context.Context, req nativeexec.NativeRunnerRequest) (nativeexec.Runner, error) {
+	outBin, tmpDir, err := e.buildOrReuse(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return &localRunner{
+		binaryPath: outBin,
+		args:       req.Args,
+		env:        nativeexec.AppendNativeMode(req.Env),
+		stdout:     req.Stdout,
+		stderr:     req.Stderr,
+		tmpDir:     tmpDir, // "" on a cache hit — nothing to clean up
+	}, nil
+}
+
+// Build compiles (or reuses a cached) binary embedding req.Payloads and
+// returns its path — unlike Prepare, not wrapped in a Runner, since bal
+// build just hands the path to executable.Pack. Cleans up any temp dir.
+func (e *LocalExecutor) Build(ctx context.Context, req nativeexec.NativeRunnerRequest) (string, error) {
+	outBin, tmpDir, err := e.buildOrReuse(ctx, req)
+	if tmpDir != "" {
+		defer func() { _ = os.RemoveAll(tmpDir) }()
+	}
+	if err != nil {
+		return "", err
+	}
+	return outBin, nil
+}
+
+// buildOrReuse is the shared core of Prepare and Build: reuses the output
+// on a fingerprint cache hit (tmpDir == ""), else builds and persists a new one.
+func (e *LocalExecutor) buildOrReuse(ctx context.Context, req nativeexec.NativeRunnerRequest) (outBin, tmpDir string, err error) {
+	// Empty TargetOS/TargetArch means build for the host — the same
+	// convention Go's own GOOS/GOARCH env vars use.
+	targetOS := req.TargetOS
+	if targetOS == "" {
+		targetOS = runtime.GOOS
+	}
+	targetArch := req.TargetArch
+	if targetArch == "" {
+		targetArch = runtime.GOARCH
+	}
+
 	// Fast path: reuse cached binary when native imports haven't changed.
-	fingerprint, fpErr := localFingerprint(e.interpreterRoot, req.Payloads)
+	fingerprint, fpErr := localFingerprint(e.interpreterRoot, e.targetPackage, req.Payloads, targetOS, targetArch)
 	if fpErr == nil {
-		if cached, ok := e.loadCachedRunner(fingerprint, req); ok {
-			return cached, nil
+		if cachedBin, ok := e.loadCachedBinary(fingerprint); ok {
+			return cachedBin, "", nil
 		}
 	}
 
-	tmpDir, err := os.MkdirTemp("", "bal-bundle-*")
-	if err != nil {
-		return nil, fmt.Errorf("creating temp bundle dir: %w", err)
+	// dir is the real temp path; cleanup defer targets it even if the named
+	// tmpDir return is left as "" by an early error.
+	dir, mkErr := os.MkdirTemp("", "bal-bundle-*")
+	if mkErr != nil {
+		return "", "", fmt.Errorf("creating temp bundle dir: %w", mkErr)
 	}
 	ok := false
 	defer func() {
 		if !ok {
-			_ = os.RemoveAll(tmpDir)
+			_ = os.RemoveAll(dir)
 		}
 	}()
 
 	// Write each native package into its own subdirectory with its own go.mod.
 	for _, payload := range req.Payloads {
-		pkgDir := filepath.Join(tmpDir, moduleDirName(payload.GoModuleName()))
+		pkgDir := filepath.Join(dir, moduleDirName(payload.GoModuleName()))
 		if err := os.MkdirAll(pkgDir, 0o755); err != nil {
-			return nil, fmt.Errorf("creating package dir: %w", err)
+			return "", "", fmt.Errorf("creating package dir: %w", err)
 		}
 		if err := writeNativeFiles(pkgDir, payload); err != nil {
-			return nil, err
+			return "", "", err
 		}
-		modContent := fmt.Sprintf("module %s\n\ngo %s\n\nrequire ballerina-lang-go v0.0.0\nreplace ballerina-lang-go => %s\n",
-			payload.GoModuleName(), MinGoVersion, e.interpreterRoot)
+		modContent := fmt.Sprintf("module %s\n\ngo %s\n", payload.GoModuleName(), MinGoVersion)
 		if err := os.WriteFile(filepath.Join(pkgDir, "go.mod"), []byte(modContent), 0o600); err != nil {
-			return nil, fmt.Errorf("writing go.mod for %s: %w", payload.GoModuleName(), err)
+			return "", "", fmt.Errorf("writing go.mod for %s: %w", payload.GoModuleName(), err)
 		}
 	}
 
@@ -168,39 +221,37 @@ func (e *LocalExecutor) Prepare(ctx context.Context, req nativeexec.NativeRunner
 	for _, payload := range req.Payloads {
 		fmt.Fprintf(&initContent, "import _ %q\n", payload.GoModuleName())
 	}
-	initFile := filepath.Join(tmpDir, "native_init_gen.go")
+	initFile := filepath.Join(dir, "native_init_gen.go")
 	if err := os.WriteFile(initFile, []byte(initContent.String()), 0o600); err != nil {
-		return nil, fmt.Errorf("writing native_init_gen.go: %w", err)
+		return "", "", fmt.Errorf("writing native_init_gen.go: %w", err)
 	}
 
-	// Write overlay.json that injects native_init_gen.go into cli/cmd.
-	overlayDst := filepath.Join(e.interpreterRoot, "cli", "cmd", "native_init_gen.go")
+	// Write overlay.json that injects native_init_gen.go into the target package.
+	overlayDst := filepath.Join(e.interpreterRoot, filepath.FromSlash(e.targetPackage), "native_init_gen.go")
 	overlay := map[string]map[string]string{
 		"Replace": {overlayDst: initFile},
 	}
 	overlayJSON, err := json.Marshal(overlay)
 	if err != nil {
-		return nil, fmt.Errorf("marshalling overlay: %w", err)
+		return "", "", fmt.Errorf("marshalling overlay: %w", err)
 	}
-	overlayFile := filepath.Join(tmpDir, "overlay.json")
+	overlayFile := filepath.Join(dir, "overlay.json")
 	if err := os.WriteFile(overlayFile, overlayJSON, 0o600); err != nil {
-		return nil, fmt.Errorf("writing overlay.json: %w", err)
+		return "", "", fmt.Errorf("writing overlay.json: %w", err)
 	}
 
-	// Write patched go.mod + go.sum into tmpDir with all native packages.
-	patchedModFile, err := writePatchedGoMod(tmpDir, e.interpreterRoot, req.Payloads, tmpDir)
+	workspaceFile, err := writeNativeWorkspace(dir, e.interpreterRoot, req.Payloads)
 	if err != nil {
-		return nil, err
+		return "", "", err
 	}
 
-	// Ensure output directory exists. Resolve relative paths against interpreterRoot
-	// so that build, fingerprint, and run all reference the same absolute path.
-	outBin := e.outputBinary
+	// Resolve relative paths against interpreterRoot so build, fingerprint, and run agree.
+	outBin = e.outputBinary
 	if !filepath.IsAbs(outBin) {
 		outBin = filepath.Join(e.interpreterRoot, outBin)
 	}
 	if err := os.MkdirAll(filepath.Dir(outBin), 0o755); err != nil {
-		return nil, fmt.Errorf("creating output directory: %w", err)
+		return "", "", fmt.Errorf("creating output directory: %w", err)
 	}
 
 	stderr := req.Stderr
@@ -208,20 +259,20 @@ func (e *LocalExecutor) Prepare(ctx context.Context, req nativeexec.NativeRunner
 		stderr = os.Stderr
 	}
 	if _, err := fmt.Fprintln(stderr, "info: building native interpreter using local Go toolchain"); err != nil {
-		return nil, fmt.Errorf("writing build status: %w", err)
+		return "", "", fmt.Errorf("writing build status: %w", err)
 	}
 	buildCmd := exec.CommandContext(ctx, "go", "build",
 		"-C", e.interpreterRoot,
-		"-modfile", patchedModFile,
 		"-overlay", overlayFile,
 		"-tags", "native_interp",
 		"-o", outBin,
-		"./cli/cmd",
+		"./"+e.targetPackage,
 	)
+	buildCmd.Env = append(crossCompileEnv(targetOS, targetArch), "GOWORK="+workspaceFile)
 	buildCmd.Stdout = io.Discard
 	buildCmd.Stderr = stderr
 	if err := buildCmd.Run(); err != nil {
-		return nil, fmt.Errorf("building native interpreter: %w", err)
+		return "", "", fmt.Errorf("building native interpreter: %w", err)
 	}
 
 	// Persist fingerprint so the next invocation can skip the build.
@@ -230,19 +281,12 @@ func (e *LocalExecutor) Prepare(ctx context.Context, req nativeexec.NativeRunner
 	}
 
 	ok = true
-	return &localRunner{
-		binaryPath: outBin,
-		args:       req.Args,
-		env:        nativeexec.AppendNativeMode(req.Env),
-		stdout:     req.Stdout,
-		stderr:     req.Stderr,
-		tmpDir:     tmpDir,
-	}, nil
+	return outBin, dir, nil
 }
 
-// loadCachedRunner returns a runner backed by the already-compiled binary when
-// the stored fingerprint matches the current one. Returns false if a rebuild is needed.
-func (e *LocalExecutor) loadCachedRunner(fingerprint string, req nativeexec.NativeRunnerRequest) (*localRunner, bool) {
+// loadCachedBinary returns the already-compiled binary's path when the stored
+// fingerprint matches the current one. Returns false if a rebuild is needed.
+func (e *LocalExecutor) loadCachedBinary(fingerprint string) (string, bool) {
 	outBin := e.outputBinary
 	if !filepath.IsAbs(outBin) {
 		outBin = filepath.Join(e.interpreterRoot, outBin)
@@ -250,39 +294,55 @@ func (e *LocalExecutor) loadCachedRunner(fingerprint string, req nativeexec.Nati
 	fpFile := nativeexec.FingerprintPath(outBin)
 	existing, err := os.ReadFile(fpFile)
 	if err != nil || strings.TrimSpace(string(existing)) != fingerprint {
-		return nil, false
+		return "", false
 	}
 	if _, err := os.Stat(outBin); err != nil {
-		return nil, false
+		return "", false
 	}
-	return &localRunner{
-		binaryPath: outBin,
-		args:       req.Args,
-		env:        nativeexec.AppendNativeMode(req.Env),
-		stdout:     req.Stdout,
-		stderr:     req.Stderr,
-		// tmpDir is empty — cached binary, nothing to clean up
-	}, true
+	return outBin, true
 }
 
-// localFingerprint hashes the interpreter's go.mod + go.sum, the installed Go
-// toolchain version, and the current GOOS/GOARCH (to catch toolchain upgrades,
-// dependency changes, and cross-compilation target changes) plus the payload
-// contents via FingerprintPayloads.
-func localFingerprint(interpreterRoot string, payloads []nativeexec.NativePayload) (string, error) {
-	seeds := make([][]byte, 0, 4)
-	for _, name := range []string{"go.mod", "go.sum"} {
-		data, err := os.ReadFile(filepath.Join(interpreterRoot, name))
-		if err != nil {
-			return "", fmt.Errorf("reading interpreter %s: %w", name, err)
+// localFingerprint hashes the driver root, effective workspace module
+// selection, CLI manifests, Go version, target, and payload contents.
+func localFingerprint(interpreterRoot, targetPackage string, payloads []nativeexec.NativePayload, targetOS, targetArch string) (string, error) {
+	workspace, workspaceJSON, err := readSourceWorkspace(interpreterRoot)
+	if err != nil {
+		return "", err
+	}
+	seeds := [][]byte{[]byte(interpreterRoot), workspaceJSON}
+	for _, use := range workspace.Use {
+		moduleDir := resolveWorkspacePath(interpreterRoot, use.DiskPath)
+		for _, name := range []string{"go.mod", "go.sum"} {
+			data, err := os.ReadFile(filepath.Join(moduleDir, name))
+			if err == nil {
+				seeds = append(seeds, data)
+				continue
+			}
+			if !os.IsNotExist(err) || name == "go.mod" {
+				return "", fmt.Errorf("reading workspace module %s/%s: %w", use.DiskPath, name, err)
+			}
 		}
-		seeds = append(seeds, data)
 	}
 	if ver, err := installedGoVersion(); err == nil {
 		seeds = append(seeds, []byte(ver))
 	}
-	seeds = append(seeds, []byte(runtime.GOOS+"/"+runtime.GOARCH))
+	seeds = append(seeds, []byte(targetPackage), []byte(targetOS+"/"+targetArch))
 	return nativeexec.FingerprintPayloads(payloads, seeds...)
+}
+
+// crossCompileEnv returns the go build subprocess environment for
+// targetOS/targetArch, with any existing GOOS/GOARCH/CGO_ENABLED dropped
+// first. CGO_ENABLED=0 is a safety net for native deps, which are Go-only.
+func crossCompileEnv(targetOS, targetArch string) []string {
+	base := os.Environ()
+	env := make([]string, 0, len(base)+3)
+	for _, e := range base {
+		if strings.HasPrefix(e, "GOOS=") || strings.HasPrefix(e, "GOARCH=") || strings.HasPrefix(e, "CGO_ENABLED=") {
+			continue
+		}
+		env = append(env, e)
+	}
+	return append(env, "GOOS="+targetOS, "GOARCH="+targetArch, "CGO_ENABLED=0")
 }
 
 // installedGoVersion returns the full version string from `go version`.
@@ -318,42 +378,97 @@ func writeNativeFiles(dir string, payload nativeexec.NativePayload) error {
 	})
 }
 
-// writePatchedGoMod reads the interpreter's go.mod, appends a require+replace
-// pair for every native payload, and writes patched-go.mod + patched-go.sum
-// into dstDir. Each payload's module root is tmpDir/<moduleDirName>.
-// Returns the path to the patched go.mod file.
-func writePatchedGoMod(dstDir, interpreterRoot string, payloads []nativeexec.NativePayload, tmpDir string) (string, error) {
-	src := filepath.Join(interpreterRoot, "go.mod")
-	original, err := os.ReadFile(src)
+type workspaceFile struct {
+	Go      string             `json:"Go"`
+	Use     []workspaceUse     `json:"Use"`
+	Replace []workspaceReplace `json:"Replace"`
+}
+
+type workspaceUse struct {
+	DiskPath string `json:"DiskPath"`
+}
+
+type workspaceModule struct {
+	Path    string `json:"Path"`
+	Version string `json:"Version"`
+}
+
+type workspaceReplace struct {
+	Old workspaceModule `json:"Old"`
+	New workspaceModule `json:"New"`
+}
+
+func readSourceWorkspace(interpreterRoot string) (workspaceFile, []byte, error) {
+	workspacePath := filepath.Join(interpreterRoot, "go.work")
+	cmd := exec.Command("go", "work", "edit", "-json", workspacePath)
+	data, err := cmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("reading interpreter go.mod: %w", err)
+		return workspaceFile{}, nil, fmt.Errorf("reading driver workspace: %w", err)
+	}
+	var workspace workspaceFile
+	if err := json.Unmarshal(data, &workspace); err != nil {
+		return workspaceFile{}, nil, fmt.Errorf("parsing driver workspace: %w", err)
+	}
+	return workspace, data, nil
+}
+
+func resolveWorkspacePath(interpreterRoot, name string) string {
+	if filepath.IsAbs(name) {
+		return filepath.Clean(name)
+	}
+	return filepath.Join(interpreterRoot, filepath.FromSlash(name))
+}
+
+// writeNativeWorkspace preserves the driver's standard workspace selection
+// and adds one temporary module for each native payload.
+func writeNativeWorkspace(dstDir, interpreterRoot string, payloads []nativeexec.NativePayload) (string, error) {
+	source, _, err := readSourceWorkspace(interpreterRoot)
+	if err != nil {
+		return "", err
 	}
 
-	var patched bytes.Buffer
-	patched.Write(bytes.TrimRight(original, "\n"))
+	goVersion := source.Go
+	if goVersion == "" {
+		goVersion = MinGoVersion
+	}
+	var workspace strings.Builder
+	fmt.Fprintf(&workspace, "go %s\n\nuse (\n", goVersion)
+	for _, use := range source.Use {
+		moduleDir := resolveWorkspacePath(interpreterRoot, use.DiskPath)
+		if _, err := os.Stat(filepath.Join(moduleDir, "go.mod")); err != nil {
+			return "", fmt.Errorf("reading workspace module %s: %w", use.DiskPath, err)
+		}
+		fmt.Fprintf(&workspace, "\t%q\n", moduleDir)
+	}
 	for _, payload := range payloads {
-		pkgDir := filepath.Join(tmpDir, moduleDirName(payload.GoModuleName()))
-		fmt.Fprintf(&patched, "\nrequire %s v0.0.0\nreplace %s => %s",
-			payload.GoModuleName(), payload.GoModuleName(), pkgDir)
+		fmt.Fprintf(&workspace, "\t%q\n", filepath.Join(dstDir, moduleDirName(payload.GoModuleName())))
 	}
-	patched.WriteByte('\n')
+	workspace.WriteString(")\n")
 
-	dst := filepath.Join(dstDir, "patched-go.mod")
-	if err := os.WriteFile(dst, patched.Bytes(), 0o600); err != nil {
-		return "", fmt.Errorf("writing patched go.mod: %w", err)
+	if len(source.Replace) > 0 {
+		workspace.WriteString("\nreplace (\n")
+		for _, replacement := range source.Replace {
+			newPath := replacement.New.Path
+			if replacement.New.Version == "" {
+				newPath = strconv.Quote(resolveWorkspacePath(interpreterRoot, newPath))
+			}
+			fmt.Fprintf(&workspace, "\t%s", replacement.Old.Path)
+			if replacement.Old.Version != "" {
+				fmt.Fprintf(&workspace, " %s", replacement.Old.Version)
+			}
+			fmt.Fprintf(&workspace, " => %s", newPath)
+			if replacement.New.Version != "" {
+				fmt.Fprintf(&workspace, " %s", replacement.New.Version)
+			}
+			workspace.WriteByte('\n')
+		}
+		workspace.WriteString(")\n")
 	}
 
-	// -modfile expects a matching patched-go.sum alongside patched-go.mod.
-	sumSrc := filepath.Join(interpreterRoot, "go.sum")
-	sumData, err := os.ReadFile(sumSrc)
-	if err != nil {
-		return "", fmt.Errorf("reading interpreter go.sum: %w", err)
+	dst := filepath.Join(dstDir, "go.work")
+	if err := os.WriteFile(dst, []byte(workspace.String()), 0o600); err != nil {
+		return "", fmt.Errorf("writing native workspace: %w", err)
 	}
-	sumDst := filepath.Join(dstDir, "patched-go.sum")
-	if err := os.WriteFile(sumDst, sumData, 0o600); err != nil {
-		return "", fmt.Errorf("writing patched go.sum: %w", err)
-	}
-
 	return dst, nil
 }
 

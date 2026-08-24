@@ -20,10 +20,10 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 
-	"ballerina-lang-go/runtime"
-	"ballerina-lang-go/runtime/extern"
-	"ballerina-lang-go/semtypes"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/runtime"
+	"github.com/ballerina-nutcracker/ballerina/runtime/extern"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
 const (
@@ -54,7 +54,7 @@ func arrayFromBase64(byteArrTy semtypes.SemType, ctx *extern.Context, args []val
 	if err != nil {
 		return values.NewErrorWithMessage("failed to decode base64 string"), nil
 	}
-	return values.ByteSliceToList(byteArrTy, ctx.TypeCtx, data), nil
+	return values.ByteSliceToList(byteArrTy, ctx.TypeEnv(), data), nil
 }
 
 func arrayFromBase16(byteArrTy semtypes.SemType, ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
@@ -63,19 +63,51 @@ func arrayFromBase16(byteArrTy semtypes.SemType, ctx *extern.Context, args []val
 	if err != nil {
 		return values.NewErrorWithMessage("failed to decode base16 string"), nil
 	}
-	return values.ByteSliceToList(byteArrTy, ctx.TypeCtx, data), nil
+	return values.ByteSliceToList(byteArrTy, ctx.TypeEnv(), data), nil
 }
 
 func arrayPush(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 	list := args[0].(*values.List)
-	list.Append(ctx.TypeCtx, args[1:]...)
+	list.Append(ctx.TypeCtx(), args[1:]...)
 	return nil, nil
+}
+
+func arrayMap(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
+	source := args[0].(*values.List)
+	callback := args[1].(*values.Function)
+	memberTy := semtypes.ListProj(ctx.TypeCtx(), source.Type, semtypes.Int)
+	argListDef := semtypes.NewListDefinition()
+	argListTy := argListDef.Define(ctx.TypeEnv(), []semtypes.SemType{memberTy},
+		semtypes.ListMutability(semtypes.CellMutabilityNone))
+	var resultMemberTy semtypes.SemType
+	if semtypes.IsNever(memberTy) {
+		resultMemberTy = semtypes.FunctionReturnType(ctx.TypeCtx(), callback.Type, semtypes.FunctionParamListType(ctx.TypeCtx(), callback.Type))
+	} else {
+		resultMemberTy = semtypes.FunctionReturnType(ctx.TypeCtx(), callback.Type, argListTy)
+	}
+
+	items := make([]values.BalValue, source.Len())
+	callbackArgs := make([]values.BalValue, 1)
+	for i := range source.Len() {
+		callbackArgs[0] = source.Get(i)
+		result, err := ctx.InvokeFunctionValue(callback, callbackArgs)
+		if err != nil {
+			return nil, err
+		}
+		items[i] = result
+	}
+
+	resultDef := semtypes.NewListDefinition()
+	resultTy := resultDef.Define(ctx.TypeEnv(), nil, semtypes.ListRest(resultMemberTy))
+	atomic := semtypes.ToListAtomicType(ctx.TypeEnv(), resultTy)
+	filler, _ := values.FillerFactoryFor(ctx.TypeCtx(), resultMemberTy)
+	return values.NewList(resultTy, atomic, false, filler, 0, items), nil
 }
 
 func initArrayModule(rt *runtime.Runtime) {
 	env := rt.GetTypeEnv()
 	ld := semtypes.NewListDefinition()
-	byteArrTy := ld.DefineListTypeWrappedWithEnvSemType(env, semtypes.BYTE)
+	byteArrTy := ld.Define(env, nil, semtypes.ListRest(semtypes.Byte))
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "length", func(_ *extern.Context, args []values.BalValue) (values.BalValue, error) {
 		return arrayLength(args)
@@ -95,6 +127,7 @@ func initArrayModule(rt *runtime.Runtime) {
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "push", func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 		return arrayPush(ctx, args)
 	})
+	runtime.RegisterExternFunction(rt, orgName, moduleName, "map", arrayMap)
 }
 
 func init() {

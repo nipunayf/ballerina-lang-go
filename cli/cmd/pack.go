@@ -18,13 +18,12 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
-	debugcommon "ballerina-lang-go/common"
-	"ballerina-lang-go/projects"
-	"ballerina-lang-go/tools/diagnostics"
+	debugcommon "github.com/ballerina-nutcracker/ballerina/common"
+	"github.com/ballerina-nutcracker/ballerina/projects"
+	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
 
 	"github.com/spf13/cobra"
 )
@@ -91,12 +90,8 @@ func createPackCmd() *cobra.Command {
 	return cmd
 }
 
-// packError reports a pack-specific failure to stderr (writer w) and
-// returns the same error so cobra exits non-zero.
-func packError(w io.Writer, format string, args ...any) error {
-	err := fmt.Errorf(format, args...)
-	printErrorTo(w, err, "pack [<package-dir>]", false)
-	return err
+func packError(format string, args ...any) error {
+	return usageError("pack [<package-dir>]", format, args...)
 }
 
 func runPack(cmd *cobra.Command, args []string, opts *packOptions) error {
@@ -122,7 +117,7 @@ func runPack(cmd *cobra.Command, args []string, opts *packOptions) error {
 	// never carry the flag, so they skip Start.
 	if cmd.Flag("prof") != nil {
 		if err := profiler.Start(); err != nil {
-			return packError(stderr, "failed to start profiler: %w", err)
+			return packError("failed to start profiler: %w", err)
 		}
 		defer func() { _ = profiler.Stop() }()
 	}
@@ -141,7 +136,7 @@ func runPack(cmd *cobra.Command, args []string, opts *packOptions) error {
 		if opts.logFile != "" {
 			logWriter, err := os.Create(opts.logFile)
 			if err != nil {
-				return packError(stderr, "error creating log file %s: %w", opts.logFile, err)
+				return packError("error creating log file %s: %w", opts.logFile, err)
 			}
 			defer func() { _ = logWriter.Close() }()
 			debugcommon.InitDebug(debugFlags, logWriter)
@@ -159,24 +154,34 @@ func runPack(cmd *cobra.Command, args []string, opts *packOptions) error {
 
 	info, err := os.Stat(path)
 	if err != nil {
-		return packError(stderr, "invalid project path %q: %w", path, err)
+		return packError("invalid project path %q: %w", path, err)
 	}
 	if !info.IsDir() {
 		if filepath.Ext(path) == ".bal" {
-			return packError(stderr, "pack does not support single-file projects; %q is a .bal file", path)
+			return packError("pack does not support single-file projects; %q is a .bal file", path)
 		}
-		return packError(stderr, "pack requires a package directory; got %q", path)
+		return packError("pack requires a package directory; got %q", path)
 	}
 
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return packError(stderr, "resolve absolute path: %w", err)
+		return packError("resolve absolute path: %w", err)
 	}
 
-	fsys := os.DirFS(absPath)
+	// Detect whether absPath sits inside a workspace without being its
+	// root — e.g. cwd is a workspace member's own directory. If so, load
+	// from the workspace root instead so sibling member-to-member
+	// dependencies resolve, matching bal run's findWorkspaceRoot handling.
+	workspaceRoot := findWorkspaceRoot(absPath)
+	effectiveBaseDir := absPath
+	if workspaceRoot != "" && workspaceRoot != absPath {
+		effectiveBaseDir = workspaceRoot
+	}
+
+	fsys := os.DirFS(effectiveBaseDir)
 	ballerinaEnvPath, err := getBallerinaEnvPath()
 	if err != nil {
-		return packError(stderr, "resolve ballerina env path: %w", err)
+		return packError("resolve ballerina env path: %w", err)
 	}
 
 	result, err := projects.Load(fsys, ".", projects.ProjectLoadConfig{
@@ -184,31 +189,41 @@ func runPack(cmd *cobra.Command, args []string, opts *packOptions) error {
 		BuildOptions:   &buildOpts,
 	})
 	if err != nil {
-		return packError(stderr, "failed to load package: %w", err)
+		return packError("failed to load package: %w", err)
 	}
 
 	if diagResult := result.Diagnostics(); diagResult.HasErrors() {
 		printDiagnostics(fsys, stderr, diagResult, !isTerminal(), diagnostics.NewDiagnosticEnv())
-		return packError(stderr, "package loading reported errors")
+		return packError("package loading reported errors")
 	}
 
 	project := result.Project()
 	if project.Kind() == projects.ProjectKindWorkspace {
-		return packError(stderr, "provided path %q is a workspace; expected a package directory", path)
+		workspace := project.(*projects.WorkspaceProject)
+		if workspaceRoot == "" || workspaceRoot == absPath {
+			return packError("%q is a workspace; run bal pack <package-path> to pack a specific package within it", path)
+		}
+		// absPath names one specific member (we walked up to workspaceRoot
+		// to load it) — pack just that member.
+		memberProject := findBuildProjectByPath(workspace, workspaceRoot, absPath)
+		if memberProject == nil {
+			return packError("no package found at path %s within workspace %s", absPath, workspaceRoot)
+		}
+		project = memberProject
 	}
 
 	pkg := project.CurrentPackage()
 	compilation := pkg.Compilation()
 	if cd := compilation.DiagnosticResult(); cd.HasErrors() {
 		printDiagnostics(fsys, stderr, cd, !isTerminal(), compilation.DiagnosticEnv())
-		return packError(stderr, "compilation failed; .bala not produced")
+		return packError("compilation failed; .bala not produced")
 	}
 
 	balaDir := filepath.Join(absPath, projects.TargetDir, balaSubdir)
 	backend := projects.NewBallerinaBackend(compilation)
 	balaPath, err := backend.EmitBala(balaDir)
 	if err != nil {
-		return packError(stderr, "write bala: %w", err)
+		return packError("write bala: %w", err)
 	}
 
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Created %s\n", balaPath)

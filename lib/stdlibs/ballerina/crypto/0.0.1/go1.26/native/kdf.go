@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"io"
 
-	"ballerina-lang-go/runtime"
-	"ballerina-lang-go/runtime/extern"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/runtime"
+	"github.com/ballerina-nutcracker/ballerina/runtime/extern"
+	"github.com/ballerina-nutcracker/ballerina/values"
 	"golang.org/x/crypto/hkdf"
 )
 
@@ -47,7 +47,7 @@ func registerKdfFunctions(rt *runtime.Runtime, types cryptoTypes) {
 			if _, err := io.ReadFull(r, key); err != nil {
 				return cryptoError(fmt.Sprintf("Error occurred while HKDF: %s", err.Error())), nil
 			}
-			return values.ByteSliceToList(types.byteArrTy, ctx.TypeCtx, key), nil
+			return values.ByteSliceToList(types.byteArrTy, ctx.TypeEnv(), key), nil
 		})
 }
 

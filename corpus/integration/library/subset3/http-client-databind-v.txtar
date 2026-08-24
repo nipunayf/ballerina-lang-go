@@ -1,0 +1,12 @@
+-- stdout --
+200
+false
+test body
+test body
+9
+true
+
+test body
+true
+true
+-- stderr --

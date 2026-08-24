@@ -30,14 +30,14 @@ import (
 	"sync"
 	"time"
 
-	"ballerina-lang-go/bir"
-	"ballerina-lang-go/decimal"
-	"ballerina-lang-go/model"
-	"ballerina-lang-go/platform/pal"
-	"ballerina-lang-go/runtime"
-	"ballerina-lang-go/runtime/extern"
-	"ballerina-lang-go/semtypes"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/bir"
+	"github.com/ballerina-nutcracker/ballerina/decimal"
+	"github.com/ballerina-nutcracker/ballerina/model"
+	"github.com/ballerina-nutcracker/ballerina/platform/pal"
+	"github.com/ballerina-nutcracker/ballerina/runtime"
+	"github.com/ballerina-nutcracker/ballerina/runtime/extern"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
 var httpPackageID = model.NewPackageID(
@@ -90,10 +90,11 @@ func init() {
 // httpTypes holds the semtypes used by the http runtime. They are built once
 // in initHttpModule (single-threaded) and captured by the handler closures.
 type httpTypes struct {
-	byteArrTy  semtypes.SemType
-	strArrTy   semtypes.SemType
-	jsonListTy semtypes.SemType
-	jsonMapTy  semtypes.SemType
+	byteArrTy   semtypes.SemType
+	strArrTy    semtypes.SemType
+	jsonListTy  semtypes.SemType
+	jsonMapTy   semtypes.SemType
+	mapStringTy semtypes.SemType
 }
 
 // 8 KB matches Netty's HttpObjectDecoder.maxChunkSize used by jBallerina's transport.
@@ -192,32 +193,126 @@ func eagerBufferResponse(respHeaders map[string][]string, bodyStream io.ReadClos
 }
 
 // newMappingValue builds a fresh open map<anydata|error> value.
-func newMappingValue(tc semtypes.Context) *values.Map {
-	return values.NewMap(semtypes.MAPPING, semtypes.ToMappingAtomicType(tc, semtypes.MAPPING), false, nil)
+// The header/request maps and value lists built per request all use the
+// program-constant Mapping / List inherent types, and MappingAtomicInner /
+// ListAtomicInner are exactly what ToMappingAtomicType/ToListAtomicType
+// compute for those two types (their fast path for a type with no subtype
+// data) — so the shared instances can be referenced directly at package load
+// without needing a type context (or even an Env) at all. Map/List only read
+// the atomic type, never mutate it, so sharing is safe.
+var (
+	mappingAtomicType = &semtypes.MappingAtomicInner
+	listAtomicType    = &semtypes.ListAtomicInner
+)
+
+func newMappingValue() *values.Map {
+	return values.NewMap(semtypes.Mapping, mappingAtomicType, false, nil)
 }
 
 // newListValue builds a fresh open list seeded with items.
-func newListValue(tc semtypes.Context, items []values.BalValue) *values.List {
-	return values.NewList(semtypes.LIST, semtypes.ToListAtomicType(tc, semtypes.LIST), false, nil, 0, items)
+func newListValue(items []values.BalValue) *values.List {
+	return values.NewList(semtypes.List, listAtomicType, false, nil, 0, items)
 }
 
 // newTypedListValue builds a typed list seeded with items.
-func newTypedListValue(tc semtypes.Context, ty semtypes.SemType, items []values.BalValue) *values.List {
-	return values.NewList(ty, semtypes.ToListAtomicType(tc, ty), false, nil, 0, items)
+func newTypedListValue(env semtypes.Env, ty semtypes.SemType, items []values.BalValue) *values.List {
+	return values.NewList(ty, semtypes.ToListAtomicType(env, ty), false, nil, 0, items)
+}
+
+// lazyRequestHeaders holds an inbound request's raw header map until a header is
+// first accessed. Requests that never read a header (the common lightweight
+// case) skip building the Ballerina header Map/List value graph entirely; the
+// map is materialized on demand and cached back under "$headers".
+type lazyRequestHeaders struct {
+	once sync.Once
+	raw  map[string][]string
+	m    *values.Map
+}
+
+func (h *lazyRequestHeaders) materialize(tc semtypes.Context, self *values.Object) *values.Map {
+	h.once.Do(func() {
+		h.m = materializeHeaders(tc, h.raw)
+		self.Put("$headers", h.m)
+	})
+	return h.m
+}
+
+// materializeHeaders converts a raw HTTP header map into a Ballerina header Map
+// (map<string[]> keyed by lower-cased name).
+func materializeHeaders(tc semtypes.Context, raw map[string][]string) *values.Map {
+	headersMap := newMappingValue()
+	for k, vals := range raw {
+		items := make([]values.BalValue, len(vals))
+		for i, v := range vals {
+			items[i] = v
+		}
+		headersMap.Put(tc, strings.ToLower(k), newListValue(items))
+	}
+	return headersMap
+}
+
+// requestHeadersMap returns the request's header Map and whether headers are
+// present, materializing a lazy inbound-header holder on first access and
+// caching the result back under "$headers". Objects that already hold a
+// *values.Map (outbound requests built via `new`) are returned unchanged.
+func requestHeadersMap(tc semtypes.Context, self *values.Object) (*values.Map, bool) {
+	hv, ok := self.Get("$headers")
+	if !ok {
+		return nil, false
+	}
+	switch h := hv.(type) {
+	case *values.Map:
+		return h, true
+	case *lazyRequestHeaders:
+		return h.materialize(tc, self), true
+	default:
+		return nil, false
+	}
+}
+
+// rawRequestHeaders returns a fresh copy of the request's headers as a raw
+// map[string][]string (lower-cased keys) without materializing a Ballerina Map
+// when they are still lazy — used by Go-side consumers (client forwarding,
+// message-to-body) that only need the wire form. The copy is safe for the
+// caller to mutate (e.g. strip hop-by-hop headers).
+func rawRequestHeaders(self *values.Object) map[string][]string {
+	hv, _ := self.Get("$headers")
+	switch h := hv.(type) {
+	case *lazyRequestHeaders:
+		out := make(map[string][]string, len(h.raw))
+		for k, vals := range h.raw {
+			out[strings.ToLower(k)] = vals
+		}
+		return out
+	case *values.Map:
+		out := make(map[string][]string, h.Len())
+		for _, k := range h.Keys() {
+			v, _ := h.Get(k)
+			list, ok := v.(*values.List)
+			if !ok {
+				continue
+			}
+			strs := make([]string, list.Len())
+			for i := range list.Len() {
+				if s, ok := list.Get(i).(string); ok {
+					strs[i] = s
+				}
+			}
+			out[k] = strs
+		}
+		return out
+	}
+	return nil
 }
 
 // setRequestHeader sets a single-value header on an http:Request object's $headers map.
 func setRequestHeader(self *values.Object, name, val string, tc semtypes.Context) {
-	hdrsVal, ok := self.Get("$headers")
-	var hdrs *values.Map
-	if ok {
-		hdrs, _ = hdrsVal.(*values.Map)
-	}
-	if hdrs == nil {
-		hdrs = newMappingValue(tc)
+	hdrs, ok := requestHeadersMap(tc, self)
+	if !ok {
+		hdrs = newMappingValue()
 		self.Put("$headers", hdrs)
 	}
-	hdrs.Put(tc, name, newListValue(tc, []values.BalValue{val}))
+	hdrs.Put(tc, name, newListValue([]values.BalValue{val}))
 }
 
 // goCtxOrBackground returns the Go context from an extern.Context if available,
@@ -232,16 +327,25 @@ func goCtxOrBackground(_ *extern.Context) context.Context {
 // requests built by the server) so both dispatch identically — a Request built natively
 // from an incoming HTTP request must support the exact same method set as one built via
 // `new http:Request()`, since Ballerina code can't tell them apart.
-func requestMethodKeys() map[string]string {
-	names := []string{
-		"setTextPayload", "setJsonPayload", "setBinaryPayload",
-		"setHeader", "addHeader", "removeHeader", "removeAllHeaders", "getHeaderNames",
-		"setContentType", "getContentType", "getTextPayload", "getJsonPayload", "getBinaryPayload",
-		"getHeader", "getHeaders", "hasHeader", "getQueryParams", "getQueryParamValue", "getQueryParamValues",
-	}
+// requestMethodKeyCache is the constant Request method→BIR-lookup-key map,
+// built once and shared read-only by every inbound Request object. values.Object
+// only reads methodKeys (never mutates it), so sharing one map is safe and
+// avoids re-allocating it on every request.
+var requestMethodKeyCache = makeMethodKeys("ballerina/http:Request.", []string{
+	"setTextPayload", "setJsonPayload", "setBinaryPayload",
+	"setHeader", "addHeader", "removeHeader", "removeAllHeaders", "getHeaderNames",
+	"setContentType", "getContentType", "getTextPayload", "getJsonPayload", "getBinaryPayload",
+	"getHeader", "getHeaders", "hasHeader", "getQueryParams", "getQueryParamValue", "getQueryParamValues",
+})
+
+func requestMethodKeys() map[string]string { return requestMethodKeyCache }
+
+// makeMethodKeys builds a {method: "<prefix><method>"} lookup map. Used to
+// precompute the constant Request/Response method-key caches at package load.
+func makeMethodKeys(prefix string, names []string) map[string]string {
 	keys := make(map[string]string, len(names))
 	for _, n := range names {
-		keys[n] = "ballerina/http:Request." + n
+		keys[n] = prefix + n
 	}
 	return keys
 }
@@ -264,11 +368,13 @@ func initHttpModule(rt *runtime.Runtime) {
 	strArrLd := semtypes.NewListDefinition()
 	jsonMapMd := semtypes.NewMappingDefinition()
 	jsonListLd := semtypes.NewListDefinition()
+	strMapMd := semtypes.NewMappingDefinition()
 	types := httpTypes{
-		byteArrTy:  byteArrLd.DefineListTypeWrappedWithEnvSemType(env, semtypes.BYTE),
-		strArrTy:   strArrLd.DefineListTypeWrappedWithEnvSemType(env, semtypes.STRING),
-		jsonMapTy:  jsonMapMd.DefineMappingTypeWrapped(env, nil, jsonTy),
-		jsonListTy: jsonListLd.DefineListTypeWrappedWithEnvSemType(env, jsonTy),
+		byteArrTy:   byteArrLd.Define(env, nil, semtypes.ListRest(semtypes.Byte)),
+		strArrTy:    strArrLd.Define(env, nil, semtypes.ListRest(semtypes.String)),
+		jsonMapTy:   jsonMapMd.Define(env, nil, jsonTy),
+		jsonListTy:  jsonListLd.Define(env, nil, semtypes.ListRest(jsonTy)),
+		mapStringTy: strMapMd.Define(env, nil, semtypes.String),
 	}
 
 	// msgToBody converts a Ballerina RequestMessage value to (io.Reader, contentLength, contentType).
@@ -280,16 +386,8 @@ func initHttpModule(rt *runtime.Runtime) {
 		case *values.Object:
 			// http:Request object — extract body and content-type
 			ct := "application/octet-stream"
-			if hdrsVal, ok := v.Get("$headers"); ok {
-				if hdrs, ok := hdrsVal.(*values.Map); ok {
-					if cv, ok := hdrs.Get("content-type"); ok {
-						if list, ok := cv.(*values.List); ok && list.Len() > 0 {
-							if s, ok := list.Get(0).(string); ok {
-								ct = s
-							}
-						}
-					}
-				}
+			if cts := rawRequestHeaders(v)["content-type"]; len(cts) > 0 {
+				ct = cts[0]
 			}
 			bodyVal, _ := v.Get("$body")
 			if holder, ok := bodyVal.(*requestBodyHolder); ok {
@@ -319,6 +417,8 @@ func initHttpModule(rt *runtime.Runtime) {
 		}
 	}
 
+	// execBody serves post, put, patch and delete, whose parameter lists are identical:
+	// [self, path, message, headers, mediaType, targetType].
 	execBody := func(ctx *extern.Context, verb string, args []values.BalValue) (values.BalValue, error) {
 		self := args[0].(*values.Object)
 		path := args[1].(string)
@@ -327,7 +427,7 @@ func initHttpModule(rt *runtime.Runtime) {
 		contentType := ""
 		if len(args) > 2 && args[2] != nil {
 			var ct string
-			bodyReader, contentLength, ct = msgToBody(ctx.TypeCtx, args[2])
+			bodyReader, contentLength, ct = msgToBody(ctx.TypeCtx(), args[2])
 			if bodyReader == nil && ct == "json_error" {
 				return values.NewErrorWithMessage("failed to serialize body to JSON"), nil
 			}
@@ -356,7 +456,8 @@ func initHttpModule(rt *runtime.Runtime) {
 		if err != nil {
 			return values.NewErrorWithMessage(err.Error()), nil
 		}
-		return buildResponse(ctx.TypeCtx, statusCode, respHeaders, respBodyStream), nil
+		resp := buildResponse(ctx.TypeCtx(), statusCode, respHeaders, respBodyStream)
+		return bindResponse(ctx, &types, resp, args[5]), nil
 	}
 
 	// Client class def.
@@ -364,10 +465,10 @@ func initHttpModule(rt *runtime.Runtime) {
 		Name:      model.Name("Client"),
 		LookupKey: "ballerina/http:Client",
 		Fields: []bir.ObjectField{
-			{Name: "url", Ty: semtypes.STRING},
-			{Name: "timeout", Ty: semtypes.DECIMAL},
-			{Name: "followRedirects", Ty: semtypes.Union(semtypes.MAPPING, semtypes.NIL)},
-			{Name: "httpVersion", Ty: semtypes.STRING},
+			{Name: "url", Ty: semtypes.String},
+			{Name: "timeout", Ty: semtypes.Decimal},
+			{Name: "followRedirects", Ty: semtypes.Union(semtypes.Mapping, semtypes.Nil)},
+			{Name: "httpVersion", Ty: semtypes.String},
 		},
 		VTable: map[string]*bir.BIRFunction{
 			"init":            {FunctionLookupKey: "ballerina/http:Client.init"},
@@ -391,7 +492,7 @@ func initHttpModule(rt *runtime.Runtime) {
 			if !ok {
 				return nil, fmt.Errorf("parseHeader: expected string argument")
 			}
-			result, err := parseHeader(ctx.TypeCtx, input)
+			result, err := parseHeader(ctx.TypeCtx(), input)
 			if err != nil {
 				return values.NewErrorWithMessage(err.Error()), nil
 			}
@@ -673,7 +774,8 @@ func initHttpModule(rt *runtime.Runtime) {
 			if err != nil {
 				return values.NewErrorWithMessage(err.Error()), nil
 			}
-			return buildResponse(ctx.TypeCtx, statusCode, respHeaders, respBodyStream), nil
+			resp := buildResponse(ctx.TypeCtx(), statusCode, respHeaders, respBodyStream)
+			return bindResponse(ctx, &types, resp, args[3]), nil
 		})
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "Client.$remote$post",
@@ -697,7 +799,7 @@ func initHttpModule(rt *runtime.Runtime) {
 			if err != nil {
 				return values.NewErrorWithMessage(err.Error()), nil
 			}
-			return buildResponse(ctx.TypeCtx, statusCode, respHeaders, respBodyStream), nil
+			return buildResponse(ctx.TypeCtx(), statusCode, respHeaders, respBodyStream), nil
 		})
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "Client.$remote$options",
@@ -716,7 +818,8 @@ func initHttpModule(rt *runtime.Runtime) {
 			if err != nil {
 				return values.NewErrorWithMessage(err.Error()), nil
 			}
-			return buildResponse(ctx.TypeCtx, statusCode, respHeaders, respBodyStream), nil
+			resp := buildResponse(ctx.TypeCtx(), statusCode, respHeaders, respBodyStream)
+			return bindResponse(ctx, &types, resp, args[3]), nil
 		})
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "Client.$remote$put",
@@ -734,7 +837,7 @@ func initHttpModule(rt *runtime.Runtime) {
 			return execBody(ctx, "DELETE", args)
 		})
 
-	// execute: args = [self, httpVerb, path, message, headers?, mediaType?]
+	// execute: args = [self, httpVerb, path, message, headers, mediaType, targetType]
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "Client.$remote$execute",
 		func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 			self := args[0].(*values.Object)
@@ -746,7 +849,7 @@ func initHttpModule(rt *runtime.Runtime) {
 			contentType := ""
 			if len(args) > 3 && args[3] != nil {
 				var ct string
-				bodyReader, contentLength, ct = msgToBody(ctx.TypeCtx, args[3])
+				bodyReader, contentLength, ct = msgToBody(ctx.TypeCtx(), args[3])
 				if bodyReader == nil && ct == "json_error" {
 					return values.NewErrorWithMessage("failed to serialize body to JSON"), nil
 				}
@@ -775,10 +878,11 @@ func initHttpModule(rt *runtime.Runtime) {
 			if err != nil {
 				return values.NewErrorWithMessage(err.Error()), nil
 			}
-			return buildResponse(ctx.TypeCtx, statusCode, respHeaders, respBodyStream), nil
+			resp := buildResponse(ctx.TypeCtx(), statusCode, respHeaders, respBodyStream)
+			return bindResponse(ctx, &types, resp, args[6]), nil
 		})
 
-	// forward: args = [self, path, request]
+	// forward: args = [self, path, request, targetType]
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "Client.$remote$forward",
 		func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 			self := args[0].(*values.Object)
@@ -791,24 +895,9 @@ func initHttpModule(rt *runtime.Runtime) {
 				method = "GET"
 			}
 
-			// Extract headers from the request object.
-			hdrsVal, _ := reqObj.Get("$headers")
-			var reqHeaders map[string][]string
-			if hdrs, ok := hdrsVal.(*values.Map); ok {
-				reqHeaders = make(map[string][]string, hdrs.Len())
-				for _, k := range hdrs.Keys() {
-					v, _ := hdrs.Get(k)
-					if list, ok := v.(*values.List); ok {
-						strs := make([]string, list.Len())
-						for i := range list.Len() {
-							if s, ok := list.Get(i).(string); ok {
-								strs[i] = s
-							}
-						}
-						reqHeaders[k] = strs
-					}
-				}
-			}
+			// Extract headers from the request object (reads the raw inbound
+			// header map directly when still lazy, avoiding a Map round-trip).
+			reqHeaders := rawRequestHeaders(reqObj)
 			// Strip hop-by-hop headers per RFC 7230 §6.1 before forwarding.
 			removeHopByHopHeaders(reqHeaders)
 			// Apply compression mode to Accept-Encoding after hop-by-hop removal.
@@ -846,7 +935,8 @@ func initHttpModule(rt *runtime.Runtime) {
 			if err != nil {
 				return values.NewErrorWithMessage(err.Error()), nil
 			}
-			return buildResponse(ctx.TypeCtx, statusCode, respHeaders, respBodyStream), nil
+			resp := buildResponse(ctx.TypeCtx(), statusCode, respHeaders, respBodyStream)
+			return bindResponse(ctx, &types, resp, args[3]), nil
 		})
 
 	// Default lambdas for Response header position params (return "LEADING").
@@ -877,7 +967,7 @@ func initHttpModule(rt *runtime.Runtime) {
 		Name:      model.Name("Response"),
 		LookupKey: "ballerina/http:Response",
 		Fields: []bir.ObjectField{
-			{Name: "statusCode", Ty: semtypes.INT},
+			{Name: "statusCode", Ty: semtypes.Int},
 		},
 		VTable: responseVTable,
 	}
@@ -891,7 +981,7 @@ func initHttpModule(rt *runtime.Runtime) {
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "Response.initNative",
 		func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 			self := args[0].(*values.Object)
-			self.Put("$headers", newMappingValue(ctx.TypeCtx))
+			self.Put("$headers", newMappingValue())
 			self.Put("body", &responseBodyHolder{buf: []byte{}})
 			return nil, nil
 		})
@@ -906,7 +996,7 @@ func initHttpModule(rt *runtime.Runtime) {
 					ct = s
 				}
 			}
-			responseHeaders(self).Put(ctx.TypeCtx, "content-type", newListValue(ctx.TypeCtx, []values.BalValue{ct}))
+			responseHeaders(self).Put(ctx.TypeCtx(), "content-type", newListValue([]values.BalValue{ct}))
 			return nil, nil
 		})
 
@@ -924,7 +1014,7 @@ func initHttpModule(rt *runtime.Runtime) {
 					ct = s
 				}
 			}
-			responseHeaders(self).Put(ctx.TypeCtx, "content-type", newListValue(ctx.TypeCtx, []values.BalValue{ct}))
+			responseHeaders(self).Put(ctx.TypeCtx(), "content-type", newListValue([]values.BalValue{ct}))
 			return nil, nil
 		})
 
@@ -943,7 +1033,7 @@ func initHttpModule(rt *runtime.Runtime) {
 					ct = s
 				}
 			}
-			responseHeaders(self).Put(ctx.TypeCtx, "content-type", newListValue(ctx.TypeCtx, []values.BalValue{ct}))
+			responseHeaders(self).Put(ctx.TypeCtx(), "content-type", newListValue([]values.BalValue{ct}))
 			return nil, nil
 		})
 
@@ -953,7 +1043,7 @@ func initHttpModule(rt *runtime.Runtime) {
 			name := strings.ToLower(args[1].(string))
 			val := args[2].(string)
 			headers := responseHeaders(self)
-			headers.Put(ctx.TypeCtx, name, newListValue(ctx.TypeCtx, []values.BalValue{val}))
+			headers.Put(ctx.TypeCtx(), name, newListValue([]values.BalValue{val}))
 			return nil, nil
 		})
 
@@ -966,9 +1056,9 @@ func initHttpModule(rt *runtime.Runtime) {
 			headers := responseHeaders(self)
 			existing, ok := headers.Get(name)
 			if ok {
-				existing.(*values.List).Append(ctx.TypeCtx, val)
+				existing.(*values.List).Append(ctx.TypeCtx(), val)
 			} else {
-				headers.Put(ctx.TypeCtx, name, newListValue(ctx.TypeCtx, []values.BalValue{val}))
+				headers.Put(ctx.TypeCtx(), name, newListValue([]values.BalValue{val}))
 			}
 			return nil, nil
 		})
@@ -978,7 +1068,7 @@ func initHttpModule(rt *runtime.Runtime) {
 			self := args[0].(*values.Object)
 			name := strings.ToLower(args[1].(string))
 			// args[2] is position — always treat as LEADING
-			responseHeaders(self).Delete(ctx.TypeCtx, name)
+			responseHeaders(self).Delete(ctx.TypeCtx(), name)
 			return nil, nil
 		})
 
@@ -987,7 +1077,7 @@ func initHttpModule(rt *runtime.Runtime) {
 			self := args[0].(*values.Object)
 			// args[1] is position — always treat as LEADING
 			for _, k := range responseHeaders(self).Keys() {
-				responseHeaders(self).Delete(ctx.TypeCtx, k)
+				responseHeaders(self).Delete(ctx.TypeCtx(), k)
 			}
 			return nil, nil
 		})
@@ -996,25 +1086,13 @@ func initHttpModule(rt *runtime.Runtime) {
 		func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 			self := args[0].(*values.Object)
 			ct := args[1].(string)
-			responseHeaders(self).Put(ctx.TypeCtx, "content-type", newListValue(ctx.TypeCtx, []values.BalValue{ct}))
+			responseHeaders(self).Put(ctx.TypeCtx(), "content-type", newListValue([]values.BalValue{ct}))
 			return nil, nil
 		})
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "Response.getContentType",
 		func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
-			self := args[0].(*values.Object)
-			v, ok := responseHeaders(self).Get("content-type")
-			if !ok {
-				return "", nil
-			}
-			list := v.(*values.List)
-			if list.Len() == 0 {
-				return "", nil
-			}
-			if s, ok := list.Get(0).(string); ok {
-				return s, nil
-			}
-			return "", nil
+			return responseContentType(args[0].(*values.Object)), nil
 		})
 
 	// Response read methods.
@@ -1050,13 +1128,13 @@ func initHttpModule(rt *runtime.Runtime) {
 			} else if s, ok := bodyVal.(string); ok {
 				body = []byte(s)
 			}
-			dec := json.NewDecoder(bytes.NewReader(body))
-			dec.UseNumber()
-			var v interface{}
-			if err := dec.Decode(&v); err != nil {
-				return values.NewErrorWithMessage("failed to parse JSON payload: " + err.Error()), nil
+			// Shared with client data binding, so the same body decodes to the same value and
+			// trailing data after a well-formed JSON value is rejected here too.
+			payload, jsonErr := decodeJSONBody(ctx, &types, body)
+			if jsonErr != nil {
+				return jsonErr, nil
 			}
-			return values.GoToBalValue(ctx.TypeCtx, v, types.jsonListTy, types.jsonMapTy), nil
+			return payload, nil
 		})
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "Response.getBinaryPayload",
@@ -1077,7 +1155,7 @@ func initHttpModule(rt *runtime.Runtime) {
 			for i, b := range raw {
 				items[i] = int64(b)
 			}
-			return newTypedListValue(ctx.TypeCtx, types.byteArrTy, items), nil
+			return newTypedListValue(ctx.TypeEnv(), types.byteArrTy, items), nil
 		})
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "Response.hasHeader",
@@ -1123,7 +1201,7 @@ func initHttpModule(rt *runtime.Runtime) {
 			for i, k := range keys {
 				items[i] = k
 			}
-			return newTypedListValue(ctx.TypeCtx, types.strArrTy, items), nil
+			return newTypedListValue(ctx.TypeEnv(), types.strArrTy, items), nil
 		})
 
 	// Request class def.
@@ -1137,9 +1215,9 @@ func initHttpModule(rt *runtime.Runtime) {
 		Name:      model.Name("Request"),
 		LookupKey: "ballerina/http:Request",
 		Fields: []bir.ObjectField{
-			{Name: "rawPath", Ty: semtypes.STRING},
-			{Name: "method", Ty: semtypes.STRING},
-			{Name: "httpVersion", Ty: semtypes.STRING},
+			{Name: "rawPath", Ty: semtypes.String},
+			{Name: "method", Ty: semtypes.String},
+			{Name: "httpVersion", Ty: semtypes.String},
 		},
 		VTable: requestVTable,
 	}
@@ -1149,7 +1227,7 @@ func initHttpModule(rt *runtime.Runtime) {
 		func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 			self := args[0].(*values.Object)
 			self.Put("$body", &requestBodyHolder{buf: []byte{}})
-			self.Put("$headers", newMappingValue(ctx.TypeCtx))
+			self.Put("$headers", newMappingValue())
 			return nil, nil
 		})
 
@@ -1164,7 +1242,7 @@ func initHttpModule(rt *runtime.Runtime) {
 					ct = s
 				}
 			}
-			setRequestHeader(self, "content-type", ct, ctx.TypeCtx)
+			setRequestHeader(self, "content-type", ct, ctx.TypeCtx())
 			return nil, nil
 		})
 
@@ -1182,7 +1260,7 @@ func initHttpModule(rt *runtime.Runtime) {
 					ct = s
 				}
 			}
-			setRequestHeader(self, "content-type", ct, ctx.TypeCtx)
+			setRequestHeader(self, "content-type", ct, ctx.TypeCtx())
 			return nil, nil
 		})
 
@@ -1206,7 +1284,7 @@ func initHttpModule(rt *runtime.Runtime) {
 					ct = s
 				}
 			}
-			setRequestHeader(self, "content-type", ct, ctx.TypeCtx)
+			setRequestHeader(self, "content-type", ct, ctx.TypeCtx())
 			return nil, nil
 		})
 
@@ -1215,7 +1293,7 @@ func initHttpModule(rt *runtime.Runtime) {
 			self := args[0].(*values.Object)
 			name := strings.ToLower(args[1].(string))
 			val, _ := args[2].(string)
-			setRequestHeader(self, name, val, ctx.TypeCtx)
+			setRequestHeader(self, name, val, ctx.TypeCtx())
 			return nil, nil
 		})
 
@@ -1224,20 +1302,16 @@ func initHttpModule(rt *runtime.Runtime) {
 			self := args[0].(*values.Object)
 			name := strings.ToLower(args[1].(string))
 			val, _ := args[2].(string)
-			hdrsVal, ok := self.Get("$headers")
-			var hdrs *values.Map
-			if ok {
-				hdrs, _ = hdrsVal.(*values.Map)
-			}
-			if hdrs == nil {
-				hdrs = newMappingValue(ctx.TypeCtx)
+			hdrs, ok := requestHeadersMap(ctx.TypeCtx(), self)
+			if !ok {
+				hdrs = newMappingValue()
 				self.Put("$headers", hdrs)
 			}
 			existing, ok := hdrs.Get(name)
 			if ok {
-				existing.(*values.List).Append(ctx.TypeCtx, val)
+				existing.(*values.List).Append(ctx.TypeCtx(), val)
 			} else {
-				hdrs.Put(ctx.TypeCtx, name, newListValue(ctx.TypeCtx, []values.BalValue{val}))
+				hdrs.Put(ctx.TypeCtx(), name, newListValue([]values.BalValue{val}))
 			}
 			return nil, nil
 		})
@@ -1246,12 +1320,8 @@ func initHttpModule(rt *runtime.Runtime) {
 		func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 			self := args[0].(*values.Object)
 			name := strings.ToLower(args[1].(string))
-			hdrsVal, ok := self.Get("$headers")
-			if !ok {
-				return nil, nil
-			}
-			if hdrs, ok := hdrsVal.(*values.Map); ok {
-				hdrs.Delete(ctx.TypeCtx, name)
+			if hdrs, ok := requestHeadersMap(ctx.TypeCtx(), self); ok {
+				hdrs.Delete(ctx.TypeCtx(), name)
 			}
 			return nil, nil
 		})
@@ -1259,13 +1329,9 @@ func initHttpModule(rt *runtime.Runtime) {
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "Request.removeAllHeaders",
 		func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 			self := args[0].(*values.Object)
-			hdrsVal, ok := self.Get("$headers")
-			if !ok {
-				return nil, nil
-			}
-			if hdrs, ok := hdrsVal.(*values.Map); ok {
+			if hdrs, ok := requestHeadersMap(ctx.TypeCtx(), self); ok {
 				for _, k := range hdrs.Keys() {
-					hdrs.Delete(ctx.TypeCtx, k)
+					hdrs.Delete(ctx.TypeCtx(), k)
 				}
 			}
 			return nil, nil
@@ -1275,38 +1341,30 @@ func initHttpModule(rt *runtime.Runtime) {
 		func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 
 			self := args[0].(*values.Object)
-			hdrsVal, ok := self.Get("$headers")
+			hdrs, ok := requestHeadersMap(ctx.TypeCtx(), self)
 			if !ok {
-				return newTypedListValue(ctx.TypeCtx, types.strArrTy, nil), nil
-			}
-			hdrs, ok := hdrsVal.(*values.Map)
-			if !ok {
-				return newTypedListValue(ctx.TypeCtx, types.strArrTy, nil), nil
+				return newTypedListValue(ctx.TypeEnv(), types.strArrTy, nil), nil
 			}
 			keys := hdrs.Keys()
 			items := make([]values.BalValue, len(keys))
 			for i, k := range keys {
 				items[i] = k
 			}
-			return newTypedListValue(ctx.TypeCtx, types.strArrTy, items), nil
+			return newTypedListValue(ctx.TypeEnv(), types.strArrTy, items), nil
 		})
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "Request.setContentType",
 		func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 			self := args[0].(*values.Object)
 			ct := args[1].(string)
-			setRequestHeader(self, "content-type", ct, ctx.TypeCtx)
+			setRequestHeader(self, "content-type", ct, ctx.TypeCtx())
 			return nil, nil
 		})
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "Request.getContentType",
 		func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 			self := args[0].(*values.Object)
-			hdrsVal, ok := self.Get("$headers")
-			if !ok {
-				return "", nil
-			}
-			hdrs, ok := hdrsVal.(*values.Map)
+			hdrs, ok := requestHeadersMap(ctx.TypeCtx(), self)
 			if !ok {
 				return "", nil
 			}
@@ -1358,7 +1416,7 @@ func initHttpModule(rt *runtime.Runtime) {
 			if err := dec.Decode(&v); err != nil {
 				return values.NewErrorWithMessage("getJsonPayload: " + err.Error()), nil
 			}
-			return values.GoToBalValue(ctx.TypeCtx, v, types.jsonListTy, types.jsonMapTy), nil
+			return values.GoToBalValue(ctx.TypeCtx(), v, types.jsonListTy, types.jsonMapTy), nil
 		})
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "Request.getBinaryPayload",
@@ -1378,15 +1436,14 @@ func initHttpModule(rt *runtime.Runtime) {
 			for i, b := range raw {
 				items[i] = int64(b)
 			}
-			return newTypedListValue(ctx.TypeCtx, types.byteArrTy, items), nil
+			return newTypedListValue(ctx.TypeEnv(), types.byteArrTy, items), nil
 		})
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "Request.getHeader",
 		func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 			self := args[0].(*values.Object)
 			name := strings.ToLower(args[1].(string))
-			hdrsVal, _ := self.Get("$headers")
-			hdrs, ok := hdrsVal.(*values.Map)
+			hdrs, ok := requestHeadersMap(ctx.TypeCtx(), self)
 			if !ok {
 				return values.NewErrorWithMessage("header not found: " + name), nil
 			}
@@ -1405,8 +1462,7 @@ func initHttpModule(rt *runtime.Runtime) {
 		func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 			self := args[0].(*values.Object)
 			name := strings.ToLower(args[1].(string))
-			hdrsVal, _ := self.Get("$headers")
-			hdrs, ok := hdrsVal.(*values.Map)
+			hdrs, ok := requestHeadersMap(ctx.TypeCtx(), self)
 			if !ok {
 				return values.NewErrorWithMessage("header not found: " + name), nil
 			}
@@ -1421,8 +1477,7 @@ func initHttpModule(rt *runtime.Runtime) {
 		func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 			self := args[0].(*values.Object)
 			name := strings.ToLower(args[1].(string))
-			hdrsVal, _ := self.Get("$headers")
-			hdrs, ok := hdrsVal.(*values.Map)
+			hdrs, ok := requestHeadersMap(ctx.TypeCtx(), self)
 			if !ok {
 				return false, nil
 			}
@@ -1437,13 +1492,13 @@ func initHttpModule(rt *runtime.Runtime) {
 			queryStrVal, _ := self.Get("$queryStr")
 			queryStr, _ := queryStrVal.(string)
 			parsed, _ := url.ParseQuery(queryStr)
-			m := newMappingValue(ctx.TypeCtx)
+			m := newMappingValue()
 			for k, vals := range parsed {
 				items := make([]values.BalValue, len(vals))
 				for i, v := range vals {
 					items[i] = v
 				}
-				m.Put(ctx.TypeCtx, k, newTypedListValue(ctx.TypeCtx, types.strArrTy, items))
+				m.Put(ctx.TypeCtx(), k, newTypedListValue(ctx.TypeEnv(), types.strArrTy, items))
 			}
 			return m, nil
 		})
@@ -1478,7 +1533,7 @@ func initHttpModule(rt *runtime.Runtime) {
 			for i, v := range vals {
 				items[i] = v
 			}
-			return newTypedListValue(ctx.TypeCtx, types.strArrTy, items), nil
+			return newTypedListValue(ctx.TypeEnv(), types.strArrTy, items), nil
 		})
 
 	// Server-side: register the http:Listener class and its native methods.
@@ -1508,7 +1563,7 @@ func splitOutsideQuotes(s string, sep byte) []string {
 
 func parseHeader(tc semtypes.Context, input string) (*values.List, error) {
 	segments := splitOutsideQuotes(input, ',')
-	list := newListValue(tc, nil)
+	list := newListValue(nil)
 	for _, seg := range segments {
 		seg = strings.TrimSpace(seg)
 		if seg == "" {
@@ -1519,7 +1574,7 @@ func parseHeader(tc semtypes.Context, input string) (*values.List, error) {
 		if headerVal == "" {
 			return nil, fmt.Errorf("invalid header value: missing value before parameters")
 		}
-		params := newMappingValue(tc)
+		params := newMappingValue()
 		for _, param := range parts[1:] {
 			param = strings.TrimSpace(param)
 			if param == "" {
@@ -1537,7 +1592,7 @@ func parseHeader(tc semtypes.Context, input string) (*values.List, error) {
 			}
 			params.Put(tc, key, val)
 		}
-		entry := newMappingValue(tc)
+		entry := newMappingValue()
 		entry.Put(tc, "value", headerVal)
 		entry.Put(tc, "params", params)
 		list.Append(tc, entry)
@@ -1681,19 +1736,16 @@ func extractHeaders(arg values.BalValue) map[string][]string {
 // received from a client call) so both dispatch identically — a Response built natively
 // from a client's HTTP transport must support the exact same method set as one built via
 // `new http:Response()`, since Ballerina code can't tell them apart.
-func responseMethodKeys() map[string]string {
-	names := []string{
-		"setTextPayload", "setJsonPayload", "setBinaryPayload",
-		"setHeader", "addHeader", "removeHeader", "removeAllHeaders",
-		"setContentType", "getContentType", "getTextPayload", "getJsonPayload", "getBinaryPayload",
-		"hasHeader", "getHeader", "getHeaders", "getHeaderNames",
-	}
-	keys := make(map[string]string, len(names))
-	for _, n := range names {
-		keys[n] = "ballerina/http:Response." + n
-	}
-	return keys
-}
+// responseMethodKeyCache mirrors requestMethodKeyCache for Response objects:
+// a constant map built once and shared read-only across all Response objects.
+var responseMethodKeyCache = makeMethodKeys("ballerina/http:Response.", []string{
+	"setTextPayload", "setJsonPayload", "setBinaryPayload",
+	"setHeader", "addHeader", "removeHeader", "removeAllHeaders",
+	"setContentType", "getContentType", "getTextPayload", "getJsonPayload", "getBinaryPayload",
+	"hasHeader", "getHeader", "getHeaders", "getHeaderNames",
+})
+
+func responseMethodKeys() map[string]string { return responseMethodKeyCache }
 
 // buildResponse constructs a Ballerina Response object from HTTP response data.
 // All header values are stored as *values.List under the internal "$headers" key.
@@ -1701,23 +1753,24 @@ func responseMethodKeys() map[string]string {
 // Netty pipeline behaviour; the Content-Encoding header is removed from the response.
 func buildResponse(tc semtypes.Context, statusCode int, respHeaders map[string][]string, bodyStream io.ReadCloser) *values.Object {
 	bodyStream = decompressResponseBody(respHeaders, bodyStream)
-	headersMap := newMappingValue(tc)
+	headersMap := newMappingValue()
 	for k, vals := range respHeaders {
 		items := make([]values.BalValue, len(vals))
 		for i, v := range vals {
 			items[i] = v
 		}
-		headersMap.Put(tc, strings.ToLower(k), newListValue(tc, items))
+		headersMap.Put(tc, strings.ToLower(k), newListValue(items))
 	}
 	holder := eagerBufferResponse(respHeaders, bodyStream)
 	return values.NewObject(
-		semtypes.OBJECT,
+		semtypes.Object,
 		map[string]values.BalValue{
 			"statusCode": int64(statusCode),
 			"$headers":   headersMap,
 			"body":       holder,
 		},
 		responseMethodKeys(),
+		nil,
 		nil,
 	)
 }

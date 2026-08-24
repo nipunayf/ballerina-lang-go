@@ -19,7 +19,7 @@ package corpus
 import (
 	"testing"
 
-	"ballerina-lang-go/platform/palnative"
+	"github.com/ballerina-nutcracker/ballerina/platform/palnative"
 )
 
 // TestNumericIDCancelCorpus drives a real $/cancelRequest against an in-flight

@@ -16,7 +16,7 @@
 
 package semtypes
 
-import "ballerina-lang-go/common"
+import "github.com/ballerina-nutcracker/ballerina/common"
 
 type fixedLengthArray struct {
 	initial     []SemType

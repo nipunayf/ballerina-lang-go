@@ -24,9 +24,9 @@ import (
 	"crypto/sha512"
 	"hash"
 
-	"ballerina-lang-go/runtime"
-	"ballerina-lang-go/runtime/extern"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/runtime"
+	"github.com/ballerina-nutcracker/ballerina/runtime/extern"
+	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
 func registerHmacFunctions(rt *runtime.Runtime, types cryptoTypes) {
@@ -52,6 +52,6 @@ func hmacFunc(newHash func() hash.Hash, types cryptoTypes) extern.NativeFunc {
 		key := args[1].(*values.List).ToByteSlice()
 		h := hmac.New(newHash, key)
 		h.Write(input)
-		return values.ByteSliceToList(types.byteArrTy, ctx.TypeCtx, h.Sum(nil)), nil
+		return values.ByteSliceToList(types.byteArrTy, ctx.TypeEnv(), h.Sum(nil)), nil
 	}
 }

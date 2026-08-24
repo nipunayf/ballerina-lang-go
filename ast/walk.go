@@ -41,66 +41,34 @@ func Walk(v Visitor, node BLangNode) {
 	// Section 1: Top-Level/Package Declarations
 	case *BLangPackage:
 		for i := range node.Imports {
-			Walk(v, &node.Imports[i])
+			Walk(v, node.Imports[i])
 		}
 		for i := range node.XmlnsList {
-			Walk(v, &node.XmlnsList[i])
+			Walk(v, node.XmlnsList[i])
 		}
 		for i := range node.Constants {
-			Walk(v, &node.Constants[i])
+			Walk(v, node.Constants[i])
 		}
 		for i := range node.GlobalVars {
-			Walk(v, &node.GlobalVars[i])
+			Walk(v, node.GlobalVars[i])
 		}
 		for i := range node.Services {
-			Walk(v, &node.Services[i])
+			Walk(v, node.Services[i])
 		}
 		for i := range node.Functions {
-			Walk(v, &node.Functions[i])
+			Walk(v, node.Functions[i])
 		}
 		for i := range node.TypeDefinitions {
-			Walk(v, &node.TypeDefinitions[i])
+			Walk(v, node.TypeDefinitions[i])
 		}
 		for i := range node.Annotations {
-			Walk(v, &node.Annotations[i])
+			Walk(v, node.Annotations[i])
 		}
 		if node.InitFunction != nil {
 			Walk(v, node.InitFunction)
 		}
 		for i := range node.ClassDefinitions {
-			Walk(v, &node.ClassDefinitions[i])
-		}
-
-	case *BLangTestablePackage:
-		for i := range node.Imports {
-			Walk(v, &node.Imports[i])
-		}
-		for i := range node.XmlnsList {
-			Walk(v, &node.XmlnsList[i])
-		}
-		for i := range node.Constants {
-			Walk(v, &node.Constants[i])
-		}
-		for i := range node.GlobalVars {
-			Walk(v, &node.GlobalVars[i])
-		}
-		for i := range node.Services {
-			Walk(v, &node.Services[i])
-		}
-		for i := range node.Functions {
-			Walk(v, &node.Functions[i])
-		}
-		for i := range node.TypeDefinitions {
-			Walk(v, &node.TypeDefinitions[i])
-		}
-		for i := range node.Annotations {
-			Walk(v, &node.Annotations[i])
-		}
-		if node.InitFunction != nil {
-			Walk(v, node.InitFunction)
-		}
-		for i := range node.ClassDefinitions {
-			Walk(v, &node.ClassDefinitions[i])
+			Walk(v, node.ClassDefinitions[i])
 		}
 
 	case *BLangCompilationUnit:
@@ -168,26 +136,12 @@ func Walk(v Visitor, node BLangNode) {
 			Walk(v, &node.annAttachments[i])
 		}
 
-	case *BLangConstant:
+	case *BLangVariable:
 		if node.Name != nil {
 			Walk(v, node.Name)
 		}
-		for _, ann := range node.AnnAttachments {
-			Walk(v, ann.(BLangNode))
-		}
-		if node.Expr != nil {
-			Walk(v, node.Expr.(BLangNode))
-		}
-		if tn := node.TypeNode(); tn != nil {
-			Walk(v, tn.(BLangNode))
-		}
-
-	case *BLangSimpleVariable:
-		if node.Name != nil {
-			Walk(v, node.Name)
-		}
-		for _, ann := range node.AnnAttachments {
-			Walk(v, ann.(BLangNode))
+		for i := range node.AnnAttachments {
+			Walk(v, &node.AnnAttachments[i])
 		}
 		if tn := node.TypeNode(); tn != nil {
 			Walk(v, tn.(BLangNode))
@@ -207,14 +161,16 @@ func Walk(v Visitor, node BLangNode) {
 		if node.Name != nil {
 			Walk(v, node.Name)
 		}
-		for i := range node.AnnAttachments {
-			Walk(v, &node.AnnAttachments[i])
+		attachments := node.GetAnnotationAttachments()
+		for i := range attachments {
+			Walk(v, &attachments[i])
 		}
-		for i := range node.RequiredParams {
-			Walk(v, &node.RequiredParams[i])
+		params := node.GetParameters()
+		for i := range params {
+			Walk(v, &params[i])
 		}
 		if node.RestParam != nil {
-			Walk(v, node.RestParam.(BLangNode))
+			Walk(v, node.RestParam)
 		}
 		if node.returnTypeDescriptor != nil {
 			Walk(v, node.returnTypeDescriptor)
@@ -227,19 +183,21 @@ func Walk(v Visitor, node BLangNode) {
 		if node.Name != nil {
 			Walk(v, node.Name)
 		}
-		for i := range node.AnnAttachments {
-			Walk(v, &node.AnnAttachments[i])
+		attachments := node.GetAnnotationAttachments()
+		for i := range attachments {
+			Walk(v, &attachments[i])
 		}
 		for i := range node.ResourcePath {
 			if tn := node.ResourcePath[i].ParamType; tn != nil {
 				walkTypeDescriptor(v, tn)
 			}
 		}
-		for i := range node.RequiredParams {
-			Walk(v, &node.RequiredParams[i])
+		params := node.GetParameters()
+		for i := range params {
+			Walk(v, &params[i])
 		}
 		if node.RestParam != nil {
-			Walk(v, node.RestParam.(BLangNode))
+			Walk(v, node.RestParam)
 		}
 		if node.returnTypeDescriptor != nil {
 			Walk(v, node.returnTypeDescriptor)
@@ -249,8 +207,9 @@ func Walk(v Visitor, node BLangNode) {
 		}
 
 	case *BLangReturnTypeDescriptor:
-		for i := range node.AnnAttachments {
-			Walk(v, &node.AnnAttachments[i])
+		attachments := node.GetAnnotationAttachments()
+		for i := range attachments {
+			Walk(v, &attachments[i])
 		}
 		walkTypeDescriptor(v, node.TypeDescriptor)
 
@@ -346,8 +305,10 @@ func Walk(v Visitor, node BLangNode) {
 		}
 		Walk(v, &node.Body)
 
-	case *BLangSimpleVariableDef:
-		Walk(v, node.Var)
+	case *BLangVariableDef:
+		if node.Var != nil {
+			Walk(v, node.Var)
+		}
 
 	case *BLangReturn:
 		if node.Expr != nil {
@@ -494,6 +455,9 @@ func Walk(v Visitor, node BLangNode) {
 	case *BLangInferredTypedescDefault:
 		// leaf — no children
 
+	case *BLangDefaultArg:
+		// leaf — no children
+
 	case *BLangTypeConversionExpr:
 		if node.Expression != nil {
 			Walk(v, node.Expression.(BLangNode))
@@ -512,15 +476,7 @@ func Walk(v Visitor, node BLangNode) {
 		panic("unimplemented")
 
 	// Section 6: Expressions - Variable Refs
-	case *BLangSimpleVarRef:
-		if node.PkgAlias != nil {
-			Walk(v, node.PkgAlias)
-		}
-		if node.VariableName != nil {
-			Walk(v, node.VariableName)
-		}
-
-	case *BLangLocalVarRef:
+	case *BLangVarRef:
 		if node.PkgAlias != nil {
 			Walk(v, node.PkgAlias)
 		}
@@ -633,6 +589,9 @@ func Walk(v Visitor, node BLangNode) {
 		WalkTypeData(v, &node.CompletionType)
 	case *BLangTupleTypeNode:
 		for i := range node.Members {
+			for j := range node.Members[i].AnnAttachments {
+				Walk(v, &node.Members[i].AnnAttachments[j])
+			}
 			Walk(v, node.Members[i].TypeDesc.(BLangNode))
 		}
 		if node.Rest != nil {
@@ -645,8 +604,9 @@ func Walk(v Visitor, node BLangNode) {
 		}
 		for i := range node.fields {
 			field := &node.fields[i]
-			for j := range field.AnnAttachments {
-				Walk(v, &field.AnnAttachments[j])
+			attachments := field.GetAnnotationAttachments()
+			for j := range attachments {
+				Walk(v, &attachments[j])
 			}
 			Walk(v, field.Type.(BLangNode))
 			if field.DefaultExpr != nil {
@@ -663,8 +623,9 @@ func Walk(v Visitor, node BLangNode) {
 		}
 
 	case *BObjectField:
-		for i := range node.AnnAttachments {
-			Walk(v, &node.AnnAttachments[i])
+		attachments := node.GetAnnotationAttachments()
+		for i := range attachments {
+			Walk(v, &attachments[i])
 		}
 		Walk(v, node.Ty.(BLangNode))
 
@@ -678,7 +639,7 @@ func Walk(v Visitor, node BLangNode) {
 
 	case *BLangFunctionType:
 		for i := range node.RequiredParams {
-			Walk(v, &node.RequiredParams[i])
+			Walk(v, node.RequiredParams[i])
 		}
 		if node.RestParam != nil {
 			Walk(v, node.RestParam)
@@ -801,7 +762,7 @@ func Walk(v Visitor, node BLangNode) {
 
 	case *BLangGroupByClause:
 		for _, groupingKey := range node.GetGroupingKeyList() {
-			Walk(v, groupingKey.(BLangNode))
+			Walk(v, groupingKey)
 		}
 
 	case *BLangGroupingKey:
@@ -989,7 +950,7 @@ func walkClassDefnBody(v Visitor, b *classDefnBase) {
 		Walk(v, method)
 	}
 	for _, field := range b.Fields {
-		Walk(v, field.(BLangNode))
+		Walk(v, field)
 	}
 	WalkTypeData(v, &b.typeData)
 }

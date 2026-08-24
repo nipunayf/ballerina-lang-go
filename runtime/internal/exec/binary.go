@@ -20,11 +20,10 @@ import (
 	"fmt"
 	"math"
 
-	"ballerina-lang-go/bir"
-	"ballerina-lang-go/decimal"
-	"ballerina-lang-go/runtime/extern"
-	"ballerina-lang-go/runtime/internal/modules"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/bir"
+	"github.com/ballerina-nutcracker/ballerina/decimal"
+	"github.com/ballerina-nutcracker/ballerina/runtime/extern"
+	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
 func execBinaryOpAdd(ctx *extern.Context, binaryOp *bir.BinaryOp, frame *Frame) {
@@ -259,17 +258,9 @@ func execBinaryOpAnnotAccess(ctx *extern.Context, binaryOp *bir.BinaryOp, frame 
 	if typedesc.Annotations != nil {
 		value = typedesc.Annotations[key]
 	}
-	if ref, ok := value.(*values.RuntimeAnnotationValueRef); ok {
-		registry := ctx.Env.Registry.(*modules.Registry)
-		module := registry.GetModuleByName(ref.Organization, ref.Module)
-		if module == nil {
-			panic(values.NewErrorWithMessage("annotation value module is not loaded"))
-		}
-		var found bool
-		value, found = module.Globals[ref.GlobalLookupKey()]
-		if !found {
-			panic(values.NewErrorWithMessage("annotation value global is not loaded"))
-		}
+	value, ok = dereferenceAnnotationValue(ctx, value)
+	if !ok {
+		panic(values.NewErrorWithMessage("runtime annotation value is not loaded"))
 	}
 	setOperandValue(ctx, binaryOp.LhsOp, frame, value)
 }

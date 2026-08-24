@@ -20,7 +20,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"ballerina-lang-go/test_util"
+	"github.com/ballerina-nutcracker/ballerina/test_util"
 )
 
 // TestRecompileSameSourceRootViaModifierChain is the ticket-09 prerequisite

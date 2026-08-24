@@ -22,8 +22,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"ballerina-lang-go/projects"
-	"ballerina-lang-go/test_util"
+	"github.com/ballerina-nutcracker/ballerina/projects"
+	"github.com/ballerina-nutcracker/ballerina/test_util"
 )
 
 // TestModuleResolver_ExternalPackage tests that the module resolver can identify external imports.
@@ -345,9 +345,13 @@ func TestPackageResolution_TransitiveDependency(t *testing.T) {
 	// Step 5: Verify external packages were resolved and cached during compilation.
 	// middlepkg declares aaaleafpkg and leafpkg as direct deps; with the main
 	// project that's 4 packages, plus the always-compiled implicit lang libs
-	// (lang.int, lang.boolean, lang.decimal, lang.error, lang.string, lang.value,
-	// lang.xml, lang.float, lang.array, lang.map, lang.object, lang.runtime), giving 16 packages total in the cache.
-	assert.Equal(16, env.PackageCache().Size(), "expected 16 packages in cache after compilation")
+	// (lang.__internal, lang.int, lang.boolean, lang.decimal, lang.error,
+	// lang.string, lang.value, lang.xml, lang.float, lang.array, lang.map,
+	// lang.object, lang.runtime), giving 17 packages total in the cache.
+	assert.Equal(17, env.PackageCache().Size(), "expected 17 packages in cache after compilation")
+
+	cachedInternal := env.PackageCache().Get("ballerina", "lang.__internal", "0.0.1")
+	require.NotNil(cachedInternal, "lang.__internal should be cached after compilation")
 
 	cachedMiddle := env.PackageCache().Get("mockorg", "middlepkg", "1.0.0")
 	require.NotNil(cachedMiddle, "middlepkg should be cached after compilation")
@@ -361,6 +365,19 @@ func TestPackageResolution_TransitiveDependency(t *testing.T) {
 	// Step 6: Verify dependency graph shows both direct and transitive dependencies
 	resolution := pkg.Resolution()
 	require.NotNil(resolution)
+
+	internalIndex, rootIndex := -1, -1
+	for i, name := range resolution.TopologicallySortedModuleNames() {
+		switch name {
+		case "lang.__internal":
+			internalIndex = i
+		case "transitive_app":
+			rootIndex = i
+		}
+	}
+	if internalIndex < 0 || rootIndex < 0 || internalIndex >= rootIndex {
+		t.Fatalf("expected lang.__internal to compile before transitive_app, got %v", resolution.TopologicallySortedModuleNames())
+	}
 
 	resolvedDeps := resolution.ResolvedDependencies()
 

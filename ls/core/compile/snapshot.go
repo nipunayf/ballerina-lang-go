@@ -19,8 +19,8 @@ package compile
 import (
 	"sync"
 
-	"ballerina-lang-go/ls/core/event"
-	"ballerina-lang-go/projects"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/event"
+	"github.com/ballerina-nutcracker/ballerina/projects"
 )
 
 // CompilationKey is the supersession group. SourceRoot is the ADR-053

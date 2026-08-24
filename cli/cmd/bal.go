@@ -17,23 +17,42 @@
 package main
 
 import (
+	"fmt"
 	"os"
+
+	"github.com/ballerina-nutcracker/ballerina/cli/internal/executable"
 
 	"github.com/spf13/cobra"
 )
 
+// SilenceUsage avoids duplicating the USAGE block subcommands already embed
+// in their errors (see usageError).
 var rootCmd = &cobra.Command{
-	Use:           "bal",
-	Short:         "The build system and package manager of Ballerina",
-	Long:          `The build system and package manager of Ballerina`,
-	SilenceUsage:  true,
-	SilenceErrors: true,
+	Use:          "bal",
+	Short:        "The build system and package manager of Ballerina",
+	Long:         `The build system and package manager of Ballerina`,
+	SilenceUsage: true,
 }
 
 func main() {
+	// Check whether this binary is a compiled Ballerina program (produced by
+	// bal build). If so, run the embedded BIR directly and skip the CLI.
+	birPkgs, tyEnv, err := executable.TryLoad()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "ballerina:", err)
+		os.Exit(1)
+	}
+	if birPkgs != nil {
+		os.Exit(executable.Run(birPkgs, tyEnv))
+	}
+
+	rootCmd.SetErrPrefix("ballerina:")
+
 	rootCmd.AddCommand(newCmd)
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(packCmd)
+	rootCmd.AddCommand(buildCmd)
+	rootCmd.AddCommand(pushCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(startLangServerCmd)
 

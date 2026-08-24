@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"ballerina-lang-go/tools/diagnostics"
+	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
 )
 
 var fsys = os.DirFS(".")

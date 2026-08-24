@@ -5,33 +5,38 @@
         (user-defined-type http Client)) (expr
         (checked-expr
           (new (
-            (literal https://example.com)))))))
+            (literal https://example.com) <default>))))))
     (var-def
-      (variable r (expr
+      (variable r (type
+        (user-defined-type http Response)) (expr
         (checked-expr
           (remote-method-call post expr:
             (simple-var-ref c) (
             (literal /post)
-            (literal hello world)))))))
+            (literal hello world) <default> <default>
+            (typedesc-expr)))))))
     (expression-stmt
       (invocation io println (
         (field-based-access statusCode
           (simple-var-ref r)))))
     (var-def
-      (variable r2 (expr
+      (variable r2 (type
+        (user-defined-type http Response)) (expr
         (checked-expr
           (remote-method-call post expr:
             (simple-var-ref c) (
             (literal /post)
             (literal {"key":"value"})
             (literal <nil>)
-            (literal application/json)))))))
+            (literal application/json)
+            (typedesc-expr)))))))
     (expression-stmt
       (invocation io println (
         (field-based-access statusCode
           (simple-var-ref r2)))))
     (var-def
-      (variable r3 (expr
+      (variable r3 (type
+        (user-defined-type http Response)) (expr
         (checked-expr
           (remote-method-call post expr:
             (simple-var-ref c) (
@@ -42,7 +47,8 @@
                 (literal test))
               (key-value
                 (literal count)
-                (literal 1)))))))))
+                (literal 1))) <default> <default>
+            (typedesc-expr)))))))
     (expression-stmt
       (invocation io println (
         (field-based-access statusCode

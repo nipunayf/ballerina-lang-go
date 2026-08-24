@@ -19,8 +19,8 @@ package server
 import (
 	"testing"
 
-	"ballerina-lang-go/ls/core/compile"
-	"ballerina-lang-go/ls/protocol"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/compile"
+	"github.com/ballerina-nutcracker/ballerina/ls/protocol"
 )
 
 func TestConvertDiagnosticsUTF16Boundary(t *testing.T) {

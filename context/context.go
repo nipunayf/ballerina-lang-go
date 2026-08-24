@@ -21,10 +21,10 @@ import (
 	"sync"
 	"time"
 
-	"ballerina-lang-go/model"
-	"ballerina-lang-go/semtypes"
-	"ballerina-lang-go/tools/diagnostics"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/model"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
+	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
 type CompilationStage string
@@ -105,8 +105,32 @@ func (c *CompilerContext) CreateNarrowedSymbol(baseRef model.SymbolRef) model.Sy
 	return c.env.CreateNarrowedSymbol(baseRef)
 }
 
-func (c *CompilerContext) CreateFunctionSymbol(space *model.SymbolSpace, name string, signature model.FunctionSignature, fnTy semtypes.SemType) model.SymbolRef {
+func (c *CompilerContext) CreateFunctionSymbol(space *model.SymbolSpace, name string, signature model.TypedFunctionSignature, fnTy semtypes.SemType) model.SymbolRef {
 	return c.env.CreateFunctionSymbol(space, name, signature, fnTy)
+}
+
+func (c *CompilerContext) AllocateFunctionSignature(params []model.Param, hasRest bool) model.FunctionSignatureRef {
+	return c.env.AllocateFunctionSignature(params, hasRest)
+}
+
+func (c *CompilerContext) AssociateFunctionSignature(fn model.SymbolRef, ref model.FunctionSignatureRef) bool {
+	return c.env.AssociateFunctionSignature(fn, ref)
+}
+
+func (c *CompilerContext) FunctionSignatureRef(fn model.SymbolRef) (model.FunctionSignatureRef, bool) {
+	return c.env.FunctionSignatureRef(fn)
+}
+
+func (c *CompilerContext) UpdateFunctionSignatureIncludedRecords(ref model.FunctionSignatureRef, includedRecords []*model.IncludedRecordMetadata) {
+	c.env.UpdateFunctionSignatureIncludedRecords(ref, includedRecords)
+}
+
+func (c *CompilerContext) GetFunctionSignature(fn model.SymbolRef) (model.UntypedFunctionSignature, bool) {
+	return c.env.GetFunctionSignature(fn)
+}
+
+func (c *CompilerContext) GetFunctionSignatureByRef(ref model.FunctionSignatureRef) model.UntypedFunctionSignature {
+	return c.env.GetFunctionSignatureByRef(ref)
 }
 
 func (c *CompilerContext) UnnarrowedSymbol(symbol model.SymbolRef) model.SymbolRef {
@@ -143,6 +167,10 @@ func (c *CompilerContext) ValueSymbolMetadata(symbol model.SymbolRef) (ValueSymb
 
 func (c *CompilerContext) SetSymbolType(symbol model.SymbolRef, ty semtypes.SemType) {
 	c.GetSymbol(symbol).SetType(ty)
+}
+
+func (c *CompilerContext) SetXMLNamespaceURI(symbol model.SymbolRef, uri string) error {
+	return model.SetXMLNamespaceURI(c.GetSymbol(symbol), uri)
 }
 
 func (c *CompilerContext) SetSymbolAnnotationValue(symbol model.SymbolRef, key string, value values.AnnotationValue) {

@@ -20,10 +20,10 @@ import (
 	"context"
 	"testing"
 
-	"ballerina-lang-go/ls/core/event"
-	"ballerina-lang-go/ls/core/uri"
-	"ballerina-lang-go/ls/core/workspace"
-	"ballerina-lang-go/platform/palnative"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/event"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/uri"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/workspace"
+	"github.com/ballerina-nutcracker/ballerina/platform/palnative"
 )
 
 func newTestServices(t *testing.T) (*workspace.ProjectService, *CompilationService) {

@@ -17,12 +17,12 @@
 package exec
 
 import (
-	"ballerina-lang-go/bir"
-	"ballerina-lang-go/model"
-	"ballerina-lang-go/runtime/extern"
-	runtimeframe "ballerina-lang-go/runtime/internal/frame"
-	"ballerina-lang-go/runtime/internal/modules"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/bir"
+	"github.com/ballerina-nutcracker/ballerina/model"
+	"github.com/ballerina-nutcracker/ballerina/runtime/extern"
+	runtimeframe "github.com/ballerina-nutcracker/ballerina/runtime/internal/frame"
+	"github.com/ballerina-nutcracker/ballerina/runtime/internal/modules"
+	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
 type Frame = runtimeframe.Frame
@@ -50,7 +50,7 @@ func Store(frame *Frame, address bir.Address, value values.BalValue) {
 
 func getOperandValue(ctx *extern.Context, op *bir.BIROperand, currentFrame *Frame) values.BalValue {
 	if gv, ok := op.VariableDcl.(*bir.BIRGlobalVariableDcl); ok {
-		module := getModule(ctx, gv.PkgId)
+		module := getModule(ctx, gv.PkgID)
 		return module.Globals[gv.GlobalVarLookupKey]
 	}
 	return Load(currentFrame, op.Address)
@@ -58,7 +58,7 @@ func getOperandValue(ctx *extern.Context, op *bir.BIROperand, currentFrame *Fram
 
 func setOperandValue(ctx *extern.Context, op *bir.BIROperand, currentFrame *Frame, value values.BalValue) {
 	if gv, ok := op.VariableDcl.(*bir.BIRGlobalVariableDcl); ok {
-		module := getModule(ctx, gv.PkgId)
+		module := getModule(ctx, gv.PkgID)
 		module.Globals[gv.GlobalVarLookupKey] = value
 	} else {
 		Store(currentFrame, op.Address, value)

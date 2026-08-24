@@ -7,20 +7,12 @@
       (value-type null)))
     (block-function-body
       (var-def
-        (variable $desugar$0 (expr
-          (new
-            (user-defined-type time TimeZone) (
-            (literal +0530))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$0))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$0))) ())
-      (var-def
         (variable east (type
           (user-defined-type time TimeZone)) (expr
-          (simple-var-ref $desugar$0))))
+          (checked-expr
+            (new
+              (user-defined-type time TimeZone) (
+              (literal +0530)))))))
       (var-def
         (variable eastOffset (type
           (union-type
@@ -45,20 +37,12 @@
                 (literal minutes)))))) ())
       (block-stmt
         (var-def
-          (variable $desugar$1 (expr
-            (new
-              (user-defined-type time TimeZone) (
-              (literal -0800))))))
-        (if
-          (type-test-expr is
-            (simple-var-ref $desugar$1))
-          (block-stmt
-            (return
-              (simple-var-ref $desugar$1))) ())
-        (var-def
           (variable west (type
             (user-defined-type time TimeZone)) (expr
-            (simple-var-ref $desugar$1))))
+            (checked-expr
+              (new
+                (user-defined-type time TimeZone) (
+                (literal -0800)))))))
         (var-def
           (variable westOffset (type
             (union-type
@@ -248,37 +232,29 @@
                 (simple-var-ref badDate)
                 (error-type)))))
           (var-def
-            (variable $desugar$2 (expr
-              (invocation time civilToString (
-                (mapping-constructor-expr
-                  (key-value
-                    (literal year)
-                    (literal 2021))
-                  (key-value
-                    (literal month)
-                    (literal 4))
-                  (key-value
-                    (literal day)
-                    (literal 12))
-                  (key-value
-                    (literal hour)
-                    (literal 23))
-                  (key-value
-                    (literal minute)
-                    (literal 20))
-                  (key-value
-                    (literal timeAbbrev)
-                    (literal +05:30))))))))
-          (if
-            (type-test-expr is
-              (simple-var-ref $desugar$2))
-            (block-stmt
-              (return
-                (simple-var-ref $desugar$2))) ())
-          (var-def
             (variable noSec (type
               (value-type string)) (expr
-              (simple-var-ref $desugar$2))))
+              (checked-expr
+                (invocation time civilToString (
+                  (mapping-constructor-expr
+                    (key-value
+                      (literal year)
+                      (literal 2021))
+                    (key-value
+                      (literal month)
+                      (literal 4))
+                    (key-value
+                      (literal day)
+                      (literal 12))
+                    (key-value
+                      (literal hour)
+                      (literal 23))
+                    (key-value
+                      (literal minute)
+                      (literal 20))
+                    (key-value
+                      (literal timeAbbrev)
+                      (literal +05:30)))))))))
           (expression-stmt
             (invocation io println (
               (simple-var-ref noSec)))))))))

@@ -19,7 +19,7 @@ package server
 import (
 	"unicode/utf8"
 
-	"ballerina-lang-go/ls/protocol"
+	"github.com/ballerina-nutcracker/ballerina/ls/protocol"
 )
 
 // UTF-16 boundary: The helpers below resolve protocol.TextEdit ranges

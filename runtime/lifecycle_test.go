@@ -19,6 +19,7 @@ package runtime_test
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -26,12 +27,12 @@ import (
 	"testing"
 	"time"
 
-	_ "ballerina-lang-go/lib/rt"
-	"ballerina-lang-go/platform/pal"
-	"ballerina-lang-go/projects"
-	"ballerina-lang-go/runtime"
-	"ballerina-lang-go/runtime/extern"
-	"ballerina-lang-go/values"
+	_ "github.com/ballerina-nutcracker/ballerina/lib/rt"
+	"github.com/ballerina-nutcracker/ballerina/platform/pal"
+	"github.com/ballerina-nutcracker/ballerina/projects"
+	"github.com/ballerina-nutcracker/ballerina/runtime"
+	"github.com/ballerina-nutcracker/ballerina/runtime/extern"
+	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
 // This defines tests that validate exit status and signal handling since we can't validate those
@@ -490,6 +491,18 @@ func (p *lifecycleTestPal) Platform() pal.Platform {
 		FS: pal.FS{
 			ReadFile: func(path string) ([]byte, error) {
 				return nil, &fs.PathError{Op: "open", Path: path, Err: fs.ErrNotExist}
+			},
+			OpenReadable: func(path string) (io.ReadCloser, error) {
+				return os.Open(path)
+			},
+			OpenWritable: func(path string, appendMode bool) (io.WriteCloser, error) {
+				flag := os.O_CREATE | os.O_WRONLY
+				if appendMode {
+					flag |= os.O_APPEND
+				} else {
+					flag |= os.O_TRUNC
+				}
+				return os.OpenFile(path, flag, 0o644)
 			},
 		},
 		HTTP: pal.HTTP{

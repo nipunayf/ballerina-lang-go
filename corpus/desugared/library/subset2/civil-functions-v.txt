@@ -1,7 +1,7 @@
 (package
   (import-package ballerina io (as io))
-  (import-package ballerina time (as time))
   (import-package ballerina lang array (as lang.array))
+  (import-package ballerina time (as time))
   (function main () (
     (union-type
       (error-type)
@@ -19,19 +19,11 @@
               (simple-var-ref utcWithPrecision)))
             (literal 2)))))
       (var-def
-        (variable $desugar$0 (expr
-          (invocation time utcFromString (
-            (literal 2024-06-15T10:30:45.00Z))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$0))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$0))) ())
-      (var-def
         (variable base (type
           (user-defined-type time Utc)) (expr
-          (simple-var-ref $desugar$0))))
+          (checked-expr
+            (invocation time utcFromString (
+              (literal 2024-06-15T10:30:45.00Z)))))))
       (var-def
         (variable later (type
           (user-defined-type time Utc)) (expr
@@ -131,34 +123,18 @@
             (simple-var-ref civil)
             (literal day)))))
       (var-def
-        (variable $desugar$1 (expr
-          (new
-            (user-defined-type time TimeZone) (
-            (literal +05:30))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$1))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$1))) ())
-      (var-def
         (variable tz (type
           (user-defined-type time TimeZone)) (expr
-          (simple-var-ref $desugar$1))))
-      (var-def
-        (variable $desugar$2 (expr
-          (invocation time utcFromString (
-            (literal 2021-04-12T17:50:50.00Z))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$2))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$2))) ())
+          (checked-expr
+            (new
+              (user-defined-type time TimeZone) (
+              (literal +05:30)))))))
       (var-def
         (variable utcBase (type
           (user-defined-type time Utc)) (expr
-          (simple-var-ref $desugar$2))))
+          (checked-expr
+            (invocation time utcFromString (
+              (literal 2021-04-12T17:50:50.00Z)))))))
       (var-def
         (variable civilOffset (type
           (user-defined-type time Civil)) (expr
@@ -166,55 +142,31 @@
             (simple-var-ref tz) (
             (simple-var-ref utcBase))))))
       (var-def
-        (variable $desugar$3 (expr
-          (invocation utcFromCivil expr:
-            (simple-var-ref tz) (
-            (simple-var-ref civilOffset))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$3))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$3))) ())
-      (var-def
         (variable roundTripped (type
           (user-defined-type time Utc)) (expr
-          (simple-var-ref $desugar$3))))
+          (checked-expr
+            (invocation utcFromCivil expr:
+              (simple-var-ref tz) (
+              (simple-var-ref civilOffset)))))))
       (expression-stmt
         (invocation io println (
           (invocation time utcToString (
             (simple-var-ref roundTripped))))))
       (var-def
-        (variable $desugar$4 (expr
-          (invocation time civilToString (
-            (simple-var-ref civilOffset))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$4))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$4))) ())
-      (var-def
         (variable civilStr (type
           (value-type string)) (expr
-          (simple-var-ref $desugar$4))))
+          (checked-expr
+            (invocation time civilToString (
+              (simple-var-ref civilOffset)))))))
       (expression-stmt
         (invocation io println (
           (simple-var-ref civilStr))))
       (var-def
-        (variable $desugar$5 (expr
-          (invocation time civilFromString (
-            (literal 2021-04-12T23:20:50.520+05:30[Asia/Colombo]))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$5))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$5))) ())
-      (var-def
         (variable parsed (type
           (user-defined-type time Civil)) (expr
-          (simple-var-ref $desugar$5))))
+          (checked-expr
+            (invocation time civilFromString (
+              (literal 2021-04-12T23:20:50.520+05:30[Asia/Colombo])))))))
       (expression-stmt
         (invocation io println (
           (index-based-access

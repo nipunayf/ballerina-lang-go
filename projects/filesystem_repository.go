@@ -25,8 +25,8 @@ import (
 	"sort"
 	"strings"
 
-	"ballerina-lang-go/lib/langlibs"
-	"ballerina-lang-go/lib/stdlibs"
+	"github.com/ballerina-nutcracker/ballerina/lib/langlibs"
+	"github.com/ballerina-nutcracker/ballerina/lib/stdlibs"
 )
 
 const (

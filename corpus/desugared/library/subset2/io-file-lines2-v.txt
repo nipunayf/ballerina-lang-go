@@ -20,53 +20,29 @@
             (literal Line2)))))
       (var-def
         (variable $desugar$2 (expr
-          (invocation $default$1 (
+          (invocation $default$2 (
             (simple-var-ref $desugar$0)
             (simple-var-ref $desugar$1))))))
-      (var-def
-        (variable $desugar$3 (expr
+      (expression-stmt
+        (checked-expr
           (invocation io fileWriteLines (
             (simple-var-ref $desugar$0)
             (simple-var-ref $desugar$1)
-            (simple-var-ref $desugar$2))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$3))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$3))) ())
+            (simple-var-ref $desugar$2)))))
       (expression-stmt
-        (simple-var-ref $desugar$3))
-      (var-def
-        (variable $desugar$4 (expr
+        (checked-expr
           (invocation io fileWriteLines (
             (simple-var-ref path)
             (list-constructor-expr
               (literal Line3))
-            (literal APPEND))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$4))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$4))) ())
-      (expression-stmt
-        (simple-var-ref $desugar$4))
-      (var-def
-        (variable $desugar$5 (expr
-          (invocation io fileReadLines (
-            (simple-var-ref path))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$5))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$5))) ())
+            (literal APPEND)))))
       (var-def
         (variable lines (type
           (array-type
             (value-type string) dimensions: 1 ([]))) (expr
-          (simple-var-ref $desugar$5))))
+          (checked-expr
+            (invocation io fileReadLines (
+              (simple-var-ref path)))))))
       (expression-stmt
         (invocation io println (
           (invocation lang.array length (

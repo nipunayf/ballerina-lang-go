@@ -22,8 +22,8 @@ import (
 	"path"
 	"strings"
 
-	"ballerina-lang-go/common/tomlparser"
-	"ballerina-lang-go/tools/diagnostics"
+	"github.com/ballerina-nutcracker/ballerina/common/tomlparser"
+	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
 )
 
 // ProjectLoadConfig holds configuration for project loading.

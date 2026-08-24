@@ -26,12 +26,12 @@ import (
 	"io"
 	"sync"
 
-	"ballerina-lang-go/ls/core/compile"
-	"ballerina-lang-go/ls/core/event"
-	"ballerina-lang-go/ls/core/query"
-	"ballerina-lang-go/ls/core/uri"
-	"ballerina-lang-go/ls/core/workspace"
-	"ballerina-lang-go/ls/protocol"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/compile"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/event"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/query"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/uri"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/workspace"
+	"github.com/ballerina-nutcracker/ballerina/ls/protocol"
 )
 
 const (

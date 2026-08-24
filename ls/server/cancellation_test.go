@@ -24,11 +24,11 @@ import (
 	"io"
 	"testing"
 
-	"ballerina-lang-go/ls/core/compile"
-	"ballerina-lang-go/ls/core/event"
-	"ballerina-lang-go/ls/core/workspace"
-	"ballerina-lang-go/ls/protocol"
-	"ballerina-lang-go/platform/palnative"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/compile"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/event"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/workspace"
+	"github.com/ballerina-nutcracker/ballerina/ls/protocol"
+	"github.com/ballerina-nutcracker/ballerina/platform/palnative"
 )
 
 // batchTransport is a buffered transport: the driver frames a batch of

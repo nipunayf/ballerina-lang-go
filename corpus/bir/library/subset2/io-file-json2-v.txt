@@ -10,49 +10,51 @@ main() -> nil|error{
     %7 = ConstantLoad 4
     %8 = newArray [json...][%7]{%3, %4, %5, %6}
     data = %8;
-    %10 = fileWriteJson(path,data) -> bb1;
+    %11 = fileWriteJson(path,data) -> bb1;
   }
   bb1 {
-    $desugar$0 = %10;
-    %12 = $desugar$0 is error
+    %12 = %11 is error
     %12 ? bb2 : bb3;
   }
   bb2 {
-    PushScopeFrame 0
-    (1, %0) = (1, $desugar$0);
-    PopScopeFrame
+    %0 = %11;
     return;
   }
   bb3 {
-    %13 = fileReadJson(path) -> bb4;
+    %10 = %11;
+    GOTO bb4;
   }
   bb4 {
-    $desugar$1 = %13;
-    %15 = $desugar$1 is error
-    %15 ? bb5 : bb6;
+    %14 = fileReadJson(path) -> bb5;
   }
   bb5 {
-    PushScopeFrame 0
-    (1, %0) = (1, $desugar$1);
-    PopScopeFrame
-    return;
+    %15 = %14 is error
+    %15 ? bb6 : bb7;
   }
   bb6 {
-    result = $desugar$1;
-    %17 = <[json...]>(result)
-    arr = %17;
-    %19 = length(arr) -> bb7;
+    %0 = %14;
+    return;
   }
   bb7 {
-    %20 = %19;
-    %21 = println(%20) -> bb8;
+    %13 = %14;
+    GOTO bb8;
   }
   bb8 {
-    %23 = ConstantLoad 2
-    %22 = arr[%23];
-    %24 = println(%22) -> bb9;
+    result = %13;
+    %17 = <[json...]>(result)
+    arr = %17;
+    %19 = length(arr) -> bb9;
   }
   bb9 {
+    %20 = %19;
+    %21 = println(%20) -> bb10;
+  }
+  bb10 {
+    %23 = ConstantLoad 2
+    %22 = arr[%23];
+    %24 = println(%22) -> bb11;
+  }
+  bb11 {
     return;
   }
 }

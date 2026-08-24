@@ -1,4 +1,4 @@
-(compilation-unit  regular-source
+(compilation-unit
 (package-id $anon . 0.0.0)
   (import-package ballerina http (as http))
   (import-package ballerina io (as io))
@@ -15,7 +15,8 @@
               (literal https://example.com)
               (mapping-constructor-expr)))))))
       (var-def
-        (variable r1 (expr
+        (variable r1 (type
+          (user-defined-type http Response)) (expr
           (checked-expr
             (remote-method-call get expr:
               (simple-var-ref c1) (
@@ -35,7 +36,8 @@
                   (literal compression)
                   (simple-var-ref http COMPRESSION_AUTO)))))))))
       (var-def
-        (variable r2 (expr
+        (variable r2 (type
+          (user-defined-type http Response)) (expr
           (checked-expr
             (remote-method-call get expr:
               (simple-var-ref c2) (
@@ -55,7 +57,8 @@
                   (literal compression)
                   (simple-var-ref http COMPRESSION_ALWAYS)))))))))
       (var-def
-        (variable r3 (expr
+        (variable r3 (type
+          (user-defined-type http Response)) (expr
           (checked-expr
             (remote-method-call get expr:
               (simple-var-ref c3) (
@@ -75,7 +78,8 @@
                   (literal compression)
                   (simple-var-ref http COMPRESSION_NEVER)))))))))
       (var-def
-        (variable r4 (expr
+        (variable r4 (type
+          (user-defined-type http Response)) (expr
           (checked-expr
             (remote-method-call get expr:
               (simple-var-ref c4) (
@@ -101,7 +105,8 @@
                   (literal compression)
                   (simple-var-ref http COMPRESSION_NEVER)))))))))
       (var-def
-        (variable r5 (expr
+        (variable r5 (type
+          (user-defined-type http Response)) (expr
           (checked-expr
             (remote-method-call get expr:
               (simple-var-ref c5) (

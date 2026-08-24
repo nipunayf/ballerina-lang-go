@@ -8,7 +8,7 @@ This module provides the HTTP client and listener APIs for building and consumin
 
 **Service / Listener** — an HTTP listener with configurable host, TLS, HTTP version, and request limits; service definition with path-based routing and resource function dispatch; automatic binding of path parameters, query parameters, headers, and payloads in resource signatures; caller-based response dispatch; request/response interceptor pipeline; service-level and resource-level annotations (`@http:ServiceConfig`, `@http:ResourceConfig`, `@http:Payload`, `@http:Header`, `@http:Query`, `@http:Cache`); CORS configuration; listener authentication and authorization (File user store, LDAP, JWT, OAuth2); status code response types from resources; and SSE streaming responses.
 
-The Go Native Interpreter currently supports the **HTTP client subset only**: the nine core remote methods (including `forward`), TLS/mTLS (PEM-based), redirect following, connection pooling, and manual payload extraction from responses. The service/listener side is not yet implemented.
+The Go Native Interpreter supports the **HTTP client subset**: the nine core remote methods (including `forward`), TLS/mTLS (PEM-based), redirect following, connection pooling, and both manual payload extraction and automatic response data binding to the contextually expected type. It also supports a native **listener**: creating an `http:Listener`, attaching and detaching services, and starting and stopping it (`'start`, `gracefulStop`, `immediateStop`); attached services are dispatched by path-based routing to resource functions. See the Listener and Service tables below for the current support status of listener configuration, TLS, and broader service-side features.
 
 ## Key Functionalities
 
@@ -18,6 +18,7 @@ The Go Native Interpreter currently supports the **HTTP client subset only**: th
 - Secure connections with TLS and mutual TLS using PEM certificate and key files.
 - Set custom request headers and override the inferred Content-Type.
 - Read the response status code, text, JSON, or binary payload.
+- Bind the response payload directly to the expected type — records, arrays, maps, `json`, `string`, `byte[]`, and their nilable forms — driven by the response `Content-Type`.
 - Inspect response headers by name or enumerate all header names.
 - Construct `Response` objects in resource functions and populate them with `setTextPayload`, `setJsonPayload`, `setBinaryPayload`, `setHeader`, and direct field assignment (`response.statusCode = 404`).
 - Construct outbound `Request` objects and populate them for forwarding.
@@ -89,8 +90,9 @@ Support Levels:
 | Content-Type inference from payload type | Supported | `string` → `text/plain`, `byte[]` → `application/octet-stream`, all other `json`-compatible values → `application/json`. |
 | Media type override | Supported | `mediaType` parameter on body-carrying methods overrides the inferred Content-Type. |
 | TLS and mutual TLS (mTLS) | Partially Supported | PEM-file-based CA trust (`cert` as a string path) and client certificate/key pairs (`key` as `CertKey`) are supported. `crypto:TrustStore`, `crypto:KeyStore`, password-protected private keys (`keyPassword`), OCSP/CRL certificate revocation (`certValidation`), and TLS session timeout (`sessionTimeout`) are not supported. |
-| Client-side response data binding | Not Yet Supported | The `targetType` parameter is absent; callers must extract the payload explicitly via `getTextPayload`, `getJsonPayload`, or `getBinaryPayload`. Binding to custom record types, `xml`, or `stream<SseEvent, error?>` is not available. |
+| Client-side response data binding | Partially Supported | Every method except `head` takes a `TargetType targetType = <>` parameter inferred from the contextually expected type. An `http:Response` target (or any union containing it) yields the raw response; any other `anydata` target is deserialised from the body according to the `Content-Type` header. `xml` targets and `stream<SseEvent, error?>` targets are not available, and jBallerina's `data.jsondata` projection options are not applied. Conversion uses the same routine as `lang.value:fromJsonWithType`, so declared union member order is not honoured and record field defaults are not injected. An empty body binds to `()` for a nilable target; for a non-nilable `string` or `byte[]` target it binds to `""` or `[]` rather than raising jBallerina's `NoContentError`, which is not declared here. A target narrower than the type its builder produces — an enum or a singleton for `text/plain`, a closed all-string record for `application/x-www-form-urlencoded`, a tuple or fixed-length array for `application/octet-stream` — is converted to that target, and a body that does not fit it returns an `error`. The nilable form of such a target (`Colour?`, `Form?`) binds the same way, with an absent body giving `()`; a narrow target that is not nilable instead receives the builder's empty value and rejects it unless the narrow type admits it. |
 | Status code response binding | Not Yet Supported | `StatusCodeClient` and `getStatusCodeRecord()` are not implemented. |
+| Status code error mapping | Partially Supported | When data binding is active, a 4xx or 5xx response yields an `error` whose message is the reason phrase and whose detail carries `statusCode`, `headers`, and `body`. The distinct types `http:ClientRequestError` and `http:RemoteServerError` are not declared, so the two cases cannot be distinguished with an `is` check, and `error:detail()` is not available to read the detail. |
 | Client authentication | Not Yet Supported | The `auth` field in `ClientConfiguration` is absent. BasicAuth (`CredentialsConfig`), BearerToken, self-signed JWT (`JwtIssuerConfig`), and all OAuth2 grant types are not supported. |
 | Circuit breaker | Not Yet Supported | `circuitBreaker` configuration and `CircuitBreakerClient` are not implemented. |
 | Automatic retry | Not Yet Supported | `retryConfig` configuration and `RetryClient` are not implemented. |
@@ -128,7 +130,7 @@ Support Levels:
 | Feature/API | Support Status | Comments / Limitations |
 |---|---|---|
 | Response status code access | Supported | Exposed as the `statusCode` field on `Response`. |
-| Response payload as text | Supported | `getTextPayload()` returns the body as a `string`. |
+| Response payload as text | Supported | `getTextPayload()` returns `string\|error`. |
 | Response payload as JSON | Supported | `getJsonPayload()` parses the body and returns `json\|error`. |
 | Response payload as raw bytes | Supported | `getBinaryPayload()` returns `byte[]\|error`. |
 | Response header inspection | Supported | `hasHeader`, `getHeader`, `getHeaders`, and `getHeaderNames` operate on transport (leading) headers. Trailing header position is accepted at compile time but has no runtime effect. |
@@ -136,15 +138,15 @@ Support Levels:
 | Response write methods | Supported | `setTextPayload`, `setJsonPayload`, `setBinaryPayload` (each with optional `contentType`), `setHeader`, `addHeader`, `removeHeader`, `removeAllHeaders`, and `setContentType` populate a constructed `Response`. Status code is set by direct field assignment (`resp.statusCode = 404`). |
 | Streaming response body | Not Yet Supported | `getByteStream()` is not implemented. |
 | Server-Sent Events | Not Yet Supported | `getSseEventStream()` and consuming a `stream<SseEvent, error?>` response are not implemented. |
-| Response XML payload | Not Yet Supported | The `xml` type and related payload handling methods (`getXmlPayload()`, `setXmlPayload()`) are not implemented due to the lack of XML support in the Go runtime. |
+| Response XML payload | Not Yet Supported | `getXmlPayload()` and `setXmlPayload()` are not declared. The runtime does have an `xml` type, so this is an unimplemented gap rather than a platform limitation. |
 
 ### Listener
 
 | Feature/API | Support Status | Comments / Limitations |
 |---|---|---|
-| HTTP Listener | Not Yet Supported | The `Listener` class (start, graceful stop, attach, detach) is not implemented; no server-side listener can be created. |
-| Listener configuration | Not Yet Supported | `ListenerConfiguration` (host, timeout, HTTP version, HTTP/1.x settings, HTTP/2 window size, graceful stop timeout, request limits, server name, socket config) is not implemented. |
-| Listener TLS / mTLS | Not Yet Supported | `ListenerSecureSocket` (server certificate, mutual TLS, protocol, ciphers, etc.) is not implemented. |
+| HTTP Listener | Supported | The `Listener` class is implemented: `init`, `attach`, `detach`, `'start`, `gracefulStop`, and `immediateStop` create a listener, attach/detach services, and start/stop the server. See the `gracefulStop` behavioural note below. |
+| Listener configuration | Partially Supported | `ListenerConfiguration` supports `host` (default `0.0.0.0`), `timeout` (response write timeout, default 60s), `httpVersion` (`HTTP_1_1` or `HTTP_2_0`), and `secureSocket` (TLS). Request/response size limits, server name, `http1Settings`, `http2Settings`, and `socketConfig` are not present in the record. |
+| Listener TLS / mTLS | Partially Supported | `ListenerSecureSocket` supports a PEM server certificate/key (`key`), mutual TLS (`mutualSsl` + `cert` as the CA path), TLS protocol version bounds (`protocol`), cipher suite selection (`ciphers`), and session ticket disabling (`shareSession`) — these are the only fields the record declares. Certificate revocation validation, session/handshake timeouts, and Java KeyStore/TrustStore-based configuration are not present. |
 | Default listener | Not Yet Supported | The module-level default listener (`http:defaultListener`) is not implemented. |
 | Listener authentication and authorization | Not Yet Supported | `ListenerAuthConfig` and listener-side auth handlers (file user store, LDAP, JWT, OAuth2) are not implemented. |
 
@@ -152,8 +154,8 @@ Support Levels:
 
 | Feature/API | Support Status | Comments / Limitations |
 |---|---|---|
-| HTTP service definition and routing | Not Yet Supported | Declaring `service on listener` with path-based routing is not implemented. |
-| Resource function dispatch | Not Yet Supported | Resource functions with path parameters, accessor methods, and typed response returns are not implemented. |
+| HTTP service definition and routing | Supported | Path-based routing dispatches to the first attached service whose base path matches, not longest-prefix match; attach overlapping base paths on the same listener in most-specific-first order. |
+| Resource function dispatch | Partially Supported | Path parameters (typed segment coercion) and accessor methods (`get`, `post`, `put`, `patch`, `delete`, `head`, `options`, `default`) dispatch to the matching resource function. Resource return values are restricted to `http:Response`, `error`, or `()` — status code response types and plain `anydata`/`json` returns are not implemented (see the row below). |
 | Caller-based response dispatch | Not Yet Supported | The `Caller` class and its `respond()` method for sending responses back to the client are not implemented. |
 | Status code response types from resources | Not Yet Supported | Returning `http:Ok`, `http:Created`, `http:NotFound`, and other `StatusCodeResponse` subtypes from resource functions is not implemented. |
 | Service-level annotation | Not Yet Supported | `@http:ServiceConfig` (host, compression, chunking, CORS, auth, validation, lax data binding) is not implemented. |
@@ -174,7 +176,7 @@ Support Levels:
 | HTTP version enum | Supported | `HttpVersion` with `HTTP_1_0`, `HTTP_1_1`, and `HTTP_2_0` enum constants. `HTTP_1_0` prints a runtime warning and falls back to HTTP/1.1. |
 | Distinct HTTP error types | Not Yet Supported | All errors surface as the generic `error` type; `http:ClientError`, `http:HeaderNotFoundError`, and similar subtypes are not declared — `is http:ClientError` type checks will not work. |
 | Observability and metrics | Not Yet Supported | Metrics and tracing integration via `ballerina/observe` is not implemented. |
-| XML payloads | Not Yet Supported | The `xml` type and related payload handling methods (`getXmlPayload()`, `setXmlPayload()`) are not implemented due to the lack of XML support in the Go runtime. |
+| XML payloads | Not Yet Supported | `getXmlPayload()` and `setXmlPayload()` are not declared, and `RequestMessage` has no `xml` member. The runtime does have an `xml` type, so this is an unimplemented gap rather than a platform limitation. |
 
 ### Notable Behavioural Changes
 
@@ -184,3 +186,7 @@ Support Levels:
 - **`poolConfig.waitTime` maps to `ResponseHeaderTimeout`.** jBallerina's `waitTime` limits how long a request waits for a connection. In the Go runtime this is approximated by `ResponseHeaderTimeout` (maximum time to wait for the first response byte). True connection-wait limiting is not available in Go's `net/http` transport.
 - **`responseLimits.maxStatusLineLength` is not enforced.** The value is accepted and validated (must be ≥ 0) but has no runtime effect. Go's HTTP transport does not expose a configurable maximum status line length (unlike jBallerina's Netty `HttpClientCodec`).
 - **Proxy DNS resolution is lazy, not eager.** In jBallerina, `ProxyConfig.host` is DNS-resolved at client creation time, and an unknown hostname causes an `error` from `new http:Client(...)`. In the Go runtime, DNS resolution is deferred to the first request that uses the proxy. A bad proxy hostname does not fail at init time.
+- **A nil target type discards the payload.** jBallerina routes a `()` target through the string payload builder, so a non-empty body is handed back as a `string` even though `()` was requested. The Go-native version returns `()` and drops the body, keeping the bound value inside the requested type.
+- **Status-code error messages use the registered reason phrase.** jBallerina reports the reason phrase the server actually sent. The PAL transport contract surfaces only the status code, so the Go-native version derives the message from the status code's registered phrase (for example `Not Found` for 404). A code outside the IANA registry — 499, which nginx sends for a client-closed request, among others — has no registered phrase, and the message becomes `status code <code>` rather than being left empty.
+- **A status error with an absent body keeps its reason phrase.** jBallerina extracts the error response body with the builder its `Content-Type` selects, and an extraction failure replaces the reason phrase with `http:ApplicationResponseError creation failed: <code> response payload extraction failed`. A 4xx or 5xx sent with `Content-Type: application/json` and no body at all trips that path, because a JSON decoder rejects an empty document. The Go-native version treats an absent body as having no payload, so the message stays the reason phrase and the error detail's `body` is `()`.
+- **`gracefulStop` waits for in-flight requests to drain.** In jBallerina, `gracefulStop` effectively behaves like an immediate stop — it returns promptly without waiting for active requests, so calling it from within a resource on its own listener succeeds. The Go-native version implements the `http:Listener` contract literally and blocks until in-flight requests complete or the graceful-stop timeout (default 60s) elapses. A resource that calls `gracefulStop` on the listener serving it therefore self-deadlocks until the timeout elapses and then returns an error, rather than succeeding.

@@ -86,24 +86,25 @@ $start() -> nil|error{
     PushScopeFrame 9
     %0 = (1, $desugar$0)[(1, $desugar$1)];
     $listener = %0;
-    %2 = start($listener) -> bb5;
+    %3 = start($listener) -> bb5;
   }
   bb4 {
     return;
   }
   bb5 {
-    $desugar$3 = %2;
-    %4 = $desugar$3 is error
+    %4 = %3 is error
     %4 ? bb6 : bb7;
   }
   bb6 {
-    PushScopeFrame 0
-    (2, %0) = (1, $desugar$3);
-    PopScopeFrame
+    (1, %0) = %3;
     PopScopeFrame
     return;
   }
   bb7 {
+    %2 = %3;
+    GOTO bb8;
+  }
+  bb8 {
     %6 = (1, $desugar$1);
     %7 = ConstantLoad 1
     %8 = %7;
@@ -134,24 +135,25 @@ $gracefulStop() -> nil|error{
     PushScopeFrame 9
     %0 = (1, $desugar$0)[(1, $desugar$1)];
     $listener = %0;
-    %2 = gracefulStop($listener) -> bb5;
+    %3 = gracefulStop($listener) -> bb5;
   }
   bb4 {
     return;
   }
   bb5 {
-    $desugar$3 = %2;
-    %4 = $desugar$3 is error
+    %4 = %3 is error
     %4 ? bb6 : bb7;
   }
   bb6 {
-    PushScopeFrame 0
-    (2, %0) = (1, $desugar$3);
-    PopScopeFrame
+    (1, %0) = %3;
     PopScopeFrame
     return;
   }
   bb7 {
+    %2 = %3;
+    GOTO bb8;
+  }
+  bb8 {
     %6 = (1, $desugar$1);
     %7 = ConstantLoad 1
     %8 = %7;
@@ -182,24 +184,25 @@ $immediateStop() -> nil|error{
     PushScopeFrame 9
     %0 = (1, $desugar$0)[(1, $desugar$1)];
     $listener = %0;
-    %2 = immediateStop($listener) -> bb5;
+    %3 = immediateStop($listener) -> bb5;
   }
   bb4 {
     return;
   }
   bb5 {
-    $desugar$3 = %2;
-    %4 = $desugar$3 is error
+    %4 = %3 is error
     %4 ? bb6 : bb7;
   }
   bb6 {
-    PushScopeFrame 0
-    (2, %0) = (1, $desugar$3);
-    PopScopeFrame
+    (1, %0) = %3;
     PopScopeFrame
     return;
   }
   bb7 {
+    %2 = %3;
+    GOTO bb8;
+  }
+  bb8 {
     %6 = (1, $desugar$1);
     %7 = ConstantLoad 1
     %8 = %7;

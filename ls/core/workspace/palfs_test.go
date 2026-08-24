@@ -22,8 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"ballerina-lang-go/ls/core/event"
-	"ballerina-lang-go/platform/pal"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/event"
+	"github.com/ballerina-nutcracker/ballerina/platform/pal"
 )
 
 // fakePAL builds a pal.FS whose Stat/ReadFile/ReadDir report a counter so

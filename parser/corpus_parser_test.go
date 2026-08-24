@@ -24,9 +24,8 @@ import (
 	"strings"
 	"testing"
 
-	"ballerina-lang-go/parser/tree"
-	"ballerina-lang-go/test_util"
-	"ballerina-lang-go/tools/text"
+	"github.com/ballerina-nutcracker/ballerina/test_util"
+	"github.com/ballerina-nutcracker/ballerina/tools/text"
 
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
@@ -169,15 +168,15 @@ func parseFile(t *testing.T, testCase test_util.TestCase) {
 
 	reader := text.CharReaderFromText(string(content))
 
-	lexer := NewLexer(reader)
+	lexer := newLexer(reader)
 
-	tokenReader := CreateTokenReader(lexer)
+	tokenReader := createTokenReader(lexer)
 
-	ballerinaParser := NewBallerinaParserFromTokenReader(tokenReader)
+	ballerinaParser := newBallerinaParserFromTokenReader(tokenReader)
 
 	ast := ballerinaParser.Parse()
 
-	actualJSON := tree.GenerateJSON(ast)
+	actualJSON := generateJSON(ast)
 
 	normalizedJSON := normalizeJSON(actualJSON)
 

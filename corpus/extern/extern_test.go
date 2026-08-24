@@ -23,39 +23,56 @@ import (
 	"strings"
 	"testing"
 
-	"ballerina-lang-go/ast"
-	"ballerina-lang-go/bir"
-	bircodec "ballerina-lang-go/bir/codec"
-	"ballerina-lang-go/context"
-	"ballerina-lang-go/desugar"
-	"ballerina-lang-go/model"
-	"ballerina-lang-go/model/symbolpool"
-	"ballerina-lang-go/parser"
-	"ballerina-lang-go/projects"
-	"ballerina-lang-go/runtime"
-	"ballerina-lang-go/runtime/extern"
-	"ballerina-lang-go/semantics"
-	"ballerina-lang-go/semtypes"
-	"ballerina-lang-go/test_util/langlib"
-	"ballerina-lang-go/test_util/testharness"
-	"ballerina-lang-go/tools/text"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/ast"
+	"github.com/ballerina-nutcracker/ballerina/bir"
+	bircodec "github.com/ballerina-nutcracker/ballerina/bir/codec"
+	"github.com/ballerina-nutcracker/ballerina/birgen"
+	"github.com/ballerina-nutcracker/ballerina/context"
+	"github.com/ballerina-nutcracker/ballerina/desugar"
+	"github.com/ballerina-nutcracker/ballerina/model"
+	"github.com/ballerina-nutcracker/ballerina/model/symbolpool"
+	"github.com/ballerina-nutcracker/ballerina/nodebuilder"
+	"github.com/ballerina-nutcracker/ballerina/parser"
+	"github.com/ballerina-nutcracker/ballerina/projects"
+	"github.com/ballerina-nutcracker/ballerina/runtime"
+	"github.com/ballerina-nutcracker/ballerina/runtime/extern"
+	"github.com/ballerina-nutcracker/ballerina/semantics"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/test_util/langlib"
+	"github.com/ballerina-nutcracker/ballerina/test_util/testharness"
+	"github.com/ballerina-nutcracker/ballerina/tools/text"
+	"github.com/ballerina-nutcracker/ballerina/values"
 
-	_ "ballerina-lang-go/lib/rt"
+	_ "github.com/ballerina-nutcracker/ballerina/lib/rt"
 )
 
 func TestExternValid(t *testing.T) {
 	externs := []testharness.ExternRegistration{
-		{Org: "$anon", Module: "1-v", FuncName: "foo",
+		{
+			Org: "$anon", Module: "1-v", FuncName: "foo",
 			Impl: func(_ *extern.Context, _ []values.BalValue) (values.BalValue, error) {
 				return "$foo", nil
-			}},
-		{Org: "$anon", Module: "1-v", FuncName: "bar",
+			},
+		},
+		{
+			Org: "$anon", Module: "1-v", FuncName: "bar",
 			Impl: func(_ *extern.Context, args []values.BalValue) (values.BalValue, error) {
 				return values.String(args[0], nil) + ", " + values.String(args[1], nil), nil
-			}},
+			},
+		},
 	}
 	runExtern(t, fileCase("1-v"), testharness.NewTestPal(), externs)
+}
+
+func TestInvokeNilFunctionValue(t *testing.T) {
+	externs := []testharness.ExternRegistration{{
+		Org: "$anon", Module: "invoke-nil-function-v", FuncName: "invokeNilFunction",
+		Impl: func(ctx *extern.Context, _ []values.BalValue) (values.BalValue, error) {
+			_, err := ctx.InvokeFunctionValue(nil, nil)
+			return err != nil, nil
+		},
+	}}
+	runExtern(t, fileCase("invoke-nil-function-v"), testharness.NewTestPal(), externs)
 }
 
 func TestExternTypeMismatchArg(t *testing.T) {
@@ -77,13 +94,13 @@ func TestDependentlyTyped(t *testing.T) {
 			if got := values.String(td, nil); got != "typedesc" {
 				return nil, fmt.Errorf("expected typedesc string, got %q", got)
 			}
-			if !semtypes.IsSubtype(ctx.TypeCtx, values.SemTypeForValue(td), semtypes.TYPEDESC) {
+			if !semtypes.IsSubtype(ctx.TypeCtx(), values.SemTypeForValue(td), semtypes.Typedesc) {
 				return nil, fmt.Errorf("expected typedesc semtype")
 			}
 			switch {
-			case semtypes.IsSubtype(ctx.TypeCtx, td.Type, semtypes.INT):
+			case semtypes.IsSubtype(ctx.TypeCtx(), td.Type, semtypes.Int):
 				return int64(1), nil
-			case semtypes.IsSubtype(ctx.TypeCtx, td.Type, semtypes.STRING):
+			case semtypes.IsSubtype(ctx.TypeCtx(), td.Type, semtypes.String):
 				return "foo", nil
 			}
 			panic(values.NewErrorWithMessage("unsupported inferred typedesc constraint"))
@@ -93,7 +110,7 @@ func TestDependentlyTyped(t *testing.T) {
 			if !ok {
 				return nil, fmt.Errorf("expected typedesc argument, got %T", args[1])
 			}
-			if !semtypes.IsSubtype(ctx.TypeCtx, td.Type, semtypes.INT) {
+			if !semtypes.IsSubtype(ctx.TypeCtx(), td.Type, semtypes.Int) {
 				panic(values.NewErrorWithMessage("inferredSubType requires typedesc<int>"))
 			}
 			return int64(1), nil
@@ -104,9 +121,9 @@ func TestDependentlyTyped(t *testing.T) {
 				return nil, fmt.Errorf("expected typedesc argument, got %T", args[1])
 			}
 			switch {
-			case semtypes.IsSubtype(ctx.TypeCtx, semtypes.INT, td.Type):
+			case semtypes.IsSubtype(ctx.TypeCtx(), semtypes.Int, td.Type):
 				return int64(0), nil
-			case semtypes.IsSubtype(ctx.TypeCtx, semtypes.STRING, td.Type):
+			case semtypes.IsSubtype(ctx.TypeCtx(), semtypes.String, td.Type):
 				return "bar", nil
 			}
 			panic(values.NewErrorWithMessage("unsupported inferredPartially typedesc constraint"))
@@ -124,7 +141,7 @@ func TestDependentlyTyped(t *testing.T) {
 			}
 			xVal, _ := src.Get("x")
 			yVal, _ := src.Get("y")
-			atomic := semtypes.ToMappingAtomicType(ctx.TypeCtx, td.Type)
+			atomic := semtypes.ToMappingAtomicType(ctx.TypeCtx(), td.Type)
 			return values.NewMap(td.Type, atomic, false, []values.MapEntry{
 				{Key: "x", Value: xVal.(int64) + dx},
 				{Key: "y", Value: yVal.(int64) + dy},
@@ -140,12 +157,33 @@ func TestDependentlyTyped(t *testing.T) {
 				return nil, fmt.Errorf("expected typedesc argument, got %T", args[1])
 			}
 			switch {
-			case semtypes.IsSubtype(ctx.TypeCtx, td.Type, semtypes.INT):
+			case semtypes.IsSubtype(ctx.TypeCtx(), td.Type, semtypes.Int):
 				return val, nil
-			case semtypes.IsSubtype(ctx.TypeCtx, td.Type, semtypes.STRING):
+			case semtypes.IsSubtype(ctx.TypeCtx(), td.Type, semtypes.String):
 				return fmt.Sprintf("%d", val), nil
 			}
 			panic(values.NewErrorWithMessage("unsupported inferredWithDefault typedesc constraint"))
+		}},
+		{Org: org, Module: mod, FuncName: "inferredMaybeError", Impl: func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
+			td, ok := args[0].(*values.TypeDesc)
+			if !ok {
+				return nil, fmt.Errorf("expected typedesc argument, got %T", args[0])
+			}
+			// return an error to verify the inferred typedesc was widened to include error
+			if semtypes.IsSubtype(ctx.TypeCtx(), semtypes.Error, td.Type) {
+				return values.NewErrorWithMessage("error"), nil
+			}
+			panic(values.NewErrorWithMessage("inferredMaybeError: expected error to be in typedesc"))
+		}},
+		{Org: org, Module: mod, FuncName: "Getter." + model.RemoteMethodName("get"), Impl: func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
+			td, ok := args[1].(*values.TypeDesc)
+			if !ok {
+				return nil, fmt.Errorf("expected typedesc argument, got %T", args[1])
+			}
+			if !semtypes.IsSubtype(ctx.TypeCtx(), semtypes.String, td.Type) {
+				panic(values.NewErrorWithMessage("Getter.get: expected string-compatible typedesc"))
+			}
+			return "immutable", nil
 		}},
 	}
 	runExtern(t, fileCase("dependently-typed-v"), testharness.NewTestPal(), externs)
@@ -193,9 +231,9 @@ func TestDependentlyTypedIncludedRecordParam(t *testing.T) {
 			yVal, _ := src.Get("y")
 			dxVal, _ := opts.Get("dx")
 			dyVal, _ := opts.Get("dy")
-			out := values.NewMap(td.Type, semtypes.ToMappingAtomicType(ctx.TypeCtx, td.Type), false, nil)
-			out.Put(ctx.TypeCtx, "x", xVal.(int64)+dxVal.(int64))
-			out.Put(ctx.TypeCtx, "y", yVal.(int64)+dyVal.(int64))
+			out := values.NewMap(td.Type, semtypes.ToMappingAtomicType(ctx.TypeCtx(), td.Type), false, nil)
+			out.Put(ctx.TypeCtx(), "x", xVal.(int64)+dxVal.(int64))
+			out.Put(ctx.TypeCtx(), "y", yVal.(int64)+dyVal.(int64))
 			return out, nil
 		},
 	}}
@@ -212,9 +250,9 @@ func TestDependentlyTypedMethod(t *testing.T) {
 				return nil, fmt.Errorf("expected typedesc argument, got %T", args[3])
 			}
 			switch {
-			case semtypes.IsSubtype(ctx.TypeCtx, semtypes.STRING, td.Type):
+			case semtypes.IsSubtype(ctx.TypeCtx(), semtypes.String, td.Type):
 				return "string response", nil
-			case semtypes.IsSubtype(ctx.TypeCtx, semtypes.INT, td.Type):
+			case semtypes.IsSubtype(ctx.TypeCtx(), semtypes.Int, td.Type):
 				return int64(2), nil
 			}
 			panic(values.NewErrorWithMessage("unsupported targetType"))
@@ -225,14 +263,18 @@ func TestDependentlyTypedMethod(t *testing.T) {
 
 func TestExternResourceMethod(t *testing.T) {
 	externs := []testharness.ExternRegistration{
-		{Org: "testorg", Module: "externresourcemethod.api", FuncName: "Client.$resource$get$0",
+		{
+			Org: "testorg", Module: "externresourcemethod.api", FuncName: "Client.$resource$get$0",
 			Impl: func(_ *extern.Context, args []values.BalValue) (values.BalValue, error) {
 				return "items/" + values.String(args[1], nil), nil
-			}},
-		{Org: "testorg", Module: "externresourcemethod.api", FuncName: "Client.$resource$get$1",
+			},
+		},
+		{
+			Org: "testorg", Module: "externresourcemethod.api", FuncName: "Client.$resource$get$1",
 			Impl: func(_ *extern.Context, args []values.BalValue) (values.BalValue, error) {
 				return args[2].(int64) * 2, nil
-			}},
+			},
+		},
 	}
 	runExtern(t, projectCase("resource-method-v"), testharness.NewTestPal(), externs)
 }
@@ -242,12 +284,15 @@ func TestListenerDispatch(t *testing.T) {
 	// io:println does at runtime, without requiring a closure over the
 	// *runtime.Runtime (which is built inside testharness.Run).
 	externs := []testharness.ExternRegistration{
-		{Org: "testorg", Module: "externlistener.lst", FuncName: "Listener.attach",
+		{
+			Org: "testorg", Module: "externlistener.lst", FuncName: "Listener.attach",
 			Impl: func(_ *extern.Context, args []values.BalValue) (values.BalValue, error) {
 				args[0].(*values.Object).Put("svc", args[1].(*values.Object))
 				return nil, nil
-			}},
-		{Org: "testorg", Module: "externlistener.lst", FuncName: "Listener.trigger",
+			},
+		},
+		{
+			Org: "testorg", Module: "externlistener.lst", FuncName: "Listener.trigger",
 			Impl: func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 				receiver := args[0].(*values.Object)
 				svcVal, ok := receiver.Get("svc")
@@ -276,19 +321,158 @@ func TestListenerDispatch(t *testing.T) {
 				}
 				_, _ = ctx.Env.Platform.IO.Stdout([]byte(values.String(out, nil) + "\n"))
 				return nil, nil
-			}},
+			},
+		},
 	}
 	runExtern(t, projectCase("listener-dispatch-v"), testharness.NewTestPal(), externs)
 }
 
+func TestAnnotationRuntimeMetadata(t *testing.T) {
+	const org, module = "testorg", "annotationruntime"
+	serviceKey := model.AnnotationKey(model.PackageIdentifier{
+		Organization: org,
+		Package:      module + ".meta",
+		Version:      "0.1.0",
+	}, "serviceMeta")
+	parameterKey := model.AnnotationKey(model.PackageIdentifier{
+		Organization: org,
+		Package:      module + ".meta",
+		Version:      "0.1.0",
+	}, "parameterMeta")
+	markerKey := model.AnnotationKey(model.PackageIdentifier{
+		Organization: org,
+		Package:      module + ".meta",
+		Version:      "0.1.0",
+	}, "marker")
+
+	attachedService := func(receiver *values.Object) (*values.Object, error) {
+		svc, ok := receiver.Get("svc")
+		if !ok {
+			return nil, fmt.Errorf("listener has no attached service")
+		}
+		return svc.(*values.Object), nil
+	}
+	annotationName := func(value values.AnnotationValue) (string, error) {
+		mapping, ok := value.(*values.Map)
+		if !ok {
+			return "", fmt.Errorf("annotation value has type %T", value)
+		}
+		name, ok := mapping.Get("name")
+		if !ok {
+			return "", fmt.Errorf("annotation value has no name")
+		}
+		return name.(string), nil
+	}
+
+	externs := []testharness.ExternRegistration{
+		{Org: org, Module: module + ".lst", FuncName: "Listener.inspect",
+			Impl: func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
+				listener := args[0].(*values.Object)
+				methodHandle, ok := ctx.LookupObjectMethod(listener, "inspect")
+				if !ok {
+					return nil, fmt.Errorf("method 'inspect' not found")
+				}
+				methodSignature, ok := ctx.MethodSignature(methodHandle)
+				if !ok || len(methodSignature.Params) != 0 {
+					return nil, fmt.Errorf("unexpected native method signature: %#v", methodSignature)
+				}
+				methodMetadata, ok := ctx.MethodMetadata(methodHandle)
+				if !ok || len(methodMetadata.Params) != 0 {
+					return nil, fmt.Errorf("unexpected native method metadata: %#v", methodMetadata)
+				}
+
+				functionHandle, ok := ctx.LookupFunction(org, module, "parameterName")
+				if !ok {
+					return nil, fmt.Errorf("function 'parameterName' not found")
+				}
+				functionSignature, ok := ctx.FunctionSignature(functionHandle)
+				if !ok || len(functionSignature.Params) != 0 ||
+					!semtypes.IsSubtype(ctx.TypeCtx(), functionSignature.ReturnType, semtypes.String) {
+					return nil, fmt.Errorf("unexpected function signature: %#v", functionSignature)
+				}
+				functionMetadata, ok := ctx.FunctionMetadata(functionHandle)
+				if !ok || len(functionMetadata.Params) != 0 {
+					return nil, fmt.Errorf("unexpected function metadata: %#v", functionMetadata)
+				}
+
+				svc, err := attachedService(listener)
+				if err != nil {
+					return nil, err
+				}
+				annotations, ok := ctx.ObjectAnnotations(svc)
+				if !ok {
+					return nil, fmt.Errorf("service annotations are unavailable")
+				}
+				serviceName, err := annotationName(annotations[serviceKey])
+				if err != nil {
+					return nil, err
+				}
+
+				handle, ok := ctx.LookupResourceMethod(svc, "get", []values.BalValue{"items"})
+				if !ok {
+					return nil, fmt.Errorf("resource method 'get items' not found")
+				}
+				signature, ok := ctx.MethodSignature(handle)
+				if !ok || len(signature.Params) != 2 || signature.RestParam == nil {
+					return nil, fmt.Errorf("unexpected resource signature: %#v", signature)
+				}
+				metadata, ok := ctx.MethodMetadata(handle)
+				if !ok || len(metadata.Params) != 2 || metadata.RestParam == nil {
+					return nil, fmt.Errorf("unexpected resource metadata: %#v", metadata)
+				}
+				countName, err := annotationName(metadata.Params[0].Annotations[parameterKey])
+				if err != nil {
+					return nil, err
+				}
+				headerName, err := annotationName(metadata.Params[1].Annotations[parameterKey])
+				if err != nil {
+					return nil, err
+				}
+				if signature.Params[0].Name != "count" || !semtypes.IsSubtype(ctx.TypeCtx(), signature.Params[0].Type, semtypes.Int) {
+					return nil, fmt.Errorf("unexpected count descriptor")
+				}
+				if signature.Params[1].Name != "header" || !semtypes.IsSubtype(ctx.TypeCtx(), signature.Params[1].Type, semtypes.String) {
+					return nil, fmt.Errorf("unexpected header descriptor")
+				}
+				if !semtypes.IsSubtype(ctx.TypeCtx(), signature.ReturnType, semtypes.Int) {
+					return nil, fmt.Errorf("unexpected return type")
+				}
+				if signature.RestParam.Name != "extras" || metadata.RestParam.Annotations[markerKey] != true {
+					return nil, fmt.Errorf("unexpected rest descriptor")
+				}
+
+				for _, line := range []string{serviceName, countName, headerName, "rest-marker"} {
+					_, _ = ctx.Env.Platform.IO.Stdout([]byte(line + "\n"))
+				}
+				return nil, nil
+			}},
+		{Org: org, Module: module + ".lst", FuncName: "Listener.invokeWithoutArgs",
+			Impl: func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
+				svc, err := attachedService(args[0].(*values.Object))
+				if err != nil {
+					return nil, err
+				}
+				handle, ok := ctx.LookupResourceMethod(svc, "get", []values.BalValue{"items"})
+				if !ok {
+					return nil, fmt.Errorf("resource method 'get items' not found")
+				}
+				return ctx.InvokeMethod(handle, nil)
+			}},
+	}
+	runExtern(t, projectCase("annotation-runtime-v"), testharness.NewTestPal(), externs)
+}
+
 func TestStartMethod(t *testing.T) {
 	externs := []testharness.ExternRegistration{
-		{Org: "testorg", Module: "startmethod.lst", FuncName: "Listener.attach",
+		{
+			Org: "testorg", Module: "startmethod.lst", FuncName: "Listener.attach",
 			Impl: func(_ *extern.Context, args []values.BalValue) (values.BalValue, error) {
 				args[0].(*values.Object).Put("svc", args[1].(*values.Object))
 				return nil, nil
-			}},
-		{Org: "testorg", Module: "startmethod.lst", FuncName: "Listener.trigger",
+			},
+		},
+		{
+			Org: "testorg", Module: "startmethod.lst", FuncName: "Listener.trigger",
 			Impl: func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 				receiver := args[0].(*values.Object)
 				svcVal, ok := receiver.Get("svc")
@@ -318,23 +502,29 @@ func TestStartMethod(t *testing.T) {
 				_, _ = ctx.Env.Platform.IO.Stdout([]byte(values.String(<-resCh, nil) + "\n"))
 				_, _ = ctx.Env.Platform.IO.Stdout([]byte(values.String(<-remCh, nil) + "\n"))
 				return nil, nil
-			}},
+			},
+		},
 	}
 	runExtern(t, projectCase("start-method-v"), testharness.NewTestPal(), externs)
 }
 
 func TestStartMethodError(t *testing.T) {
 	externs := []testharness.ExternRegistration{
-		{Org: "testorg", Module: "startmethoderror.lst", FuncName: "Listener.attach",
+		{
+			Org: "testorg", Module: "startmethoderror.lst", FuncName: "Listener.attach",
 			Impl: func(_ *extern.Context, args []values.BalValue) (values.BalValue, error) {
 				args[0].(*values.Object).Put("svc", args[1].(*values.Object))
 				return nil, nil
-			}},
-		{Org: "testorg", Module: "startmethoderror", FuncName: "$service$0." + model.RemoteMethodName("boom"),
+			},
+		},
+		{
+			Org: "testorg", Module: "startmethoderror", FuncName: "$service$0." + model.RemoteMethodName("boom"),
 			Impl: func(_ *extern.Context, _ []values.BalValue) (values.BalValue, error) {
 				return nil, fmt.Errorf("boom")
-			}},
-		{Org: "testorg", Module: "startmethoderror.lst", FuncName: "Listener.trigger",
+			},
+		},
+		{
+			Org: "testorg", Module: "startmethoderror.lst", FuncName: "Listener.trigger",
 			Impl: func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 				receiver := args[0].(*values.Object)
 				svcVal, ok := receiver.Get("svc")
@@ -372,7 +562,8 @@ func TestStartMethodError(t *testing.T) {
 				}
 				_, _ = ctx.Env.Platform.IO.Stdout([]byte(values.String(<-okCh, nil) + "\n"))
 				return nil, nil
-			}},
+			},
+		},
 	}
 	runExtern(t, projectCase("start-method-error-v"), testharness.NewTestPal(), externs)
 }
@@ -382,14 +573,18 @@ func TestExternHandle(t *testing.T) {
 		data string
 	}
 	externs := []testharness.ExternRegistration{
-		{Org: "$anon", Module: "4-v", FuncName: "createHandle",
+		{
+			Org: "$anon", Module: "4-v", FuncName: "createHandle",
 			Impl: func(_ *extern.Context, _ []values.BalValue) (values.BalValue, error) {
 				return &myHandle{data: "handle_value"}, nil
-			}},
-		{Org: "$anon", Module: "4-v", FuncName: "useHandle",
+			},
+		},
+		{
+			Org: "$anon", Module: "4-v", FuncName: "useHandle",
 			Impl: func(_ *extern.Context, args []values.BalValue) (values.BalValue, error) {
 				return args[0].(*myHandle).data, nil
-			}},
+			},
+		},
 	}
 	runExtern(t, fileCase("4-v"), testharness.NewTestPal(), externs)
 }
@@ -516,9 +711,9 @@ func TestDependentlyTypedCrossModuleRoundtrip(t *testing.T) {
 			return nil, fmt.Errorf("expected typedesc argument, got %T", args[1])
 		}
 		switch {
-		case semtypes.IsSubtype(tyCtx, td.Type, semtypes.INT):
+		case semtypes.IsSubtype(tyCtx, td.Type, semtypes.Int):
 			return int64(1), nil
-		case semtypes.IsSubtype(tyCtx, td.Type, semtypes.STRING):
+		case semtypes.IsSubtype(tyCtx, td.Type, semtypes.String):
 			return "foo", nil
 		}
 		panic(values.NewErrorWithMessage("unsupported inferred typedesc constraint"))
@@ -565,7 +760,7 @@ func compileSingleFileModule(
 	if err != nil {
 		t.Fatalf("parsing %s: %v", balPath, err)
 	}
-	cu := ast.GetCompilationUnit(cx, st)
+	cu := nodebuilder.GetCompilationUnit(cx, st)
 	pkgID := cx.NewPackageID(orgName, nameComps, model.DEFAULT_VERSION)
 	cu.SetPackageID(pkgID)
 	compilationUnits := []*ast.BLangCompilationUnit{cu}
@@ -574,27 +769,31 @@ func compileSingleFileModule(
 	if err != nil {
 		t.Fatalf("loading lang libraries failed: %v", err)
 	}
-	importedByCU := semantics.ResolveCompilationUnitImports(cx, compilationUnits, langlibs.ImplicitImports, langlibs.PublicSymbols, defaultOrg)
-	pkgScope, exported := semantics.ResolveSymbols(cx, *pkgID, importedByCU)
+	pkgScope, exported, importedSymbols := semantics.ResolveSymbols(
+		cx,
+		*pkgID,
+		compilationUnits,
+		langlibs.ImplicitImports,
+		langlibs.PublicSymbols,
+		defaultOrg,
+	)
 	assertNoDiagnostics(t, cx, "ResolveSymbols")
-	pkg := ast.ToPackageFromCompilationUnits(compilationUnits)
+	pkg := nodebuilder.ToPackageFromCompilationUnits(compilationUnits)
 	pkg.PackageID = pkgID
 	pkg.Scope = pkgScope
 	pkg.Imports = nil
-	importedSymbols := importedByCU[0].Imports
-	semantics.ResolveTopLevelNodes(cx, pkg, importedSymbols)
-	assertNoDiagnostics(t, cx, "ResolveTopLevelNodes")
-	semantics.ResolveLocalNodes(cx, pkg, importedSymbols)
-	assertNoDiagnostics(t, cx, "ResolveLocalNodes")
-	analyzer := semantics.NewSemanticAnalyzer(cx)
-	analyzer.Analyze(pkg, importedSymbols)
-	assertNoDiagnostics(t, cx, "SemanticAnalyzer")
+	semantics.ResolvePublicNodeTypes(cx, pkg, importedSymbols)
+	assertNoDiagnostics(t, cx, "ResolvePublicNodeTypes")
+	semantics.ResolvePrivateNodesTypes(cx, pkg, importedSymbols)
+	assertNoDiagnostics(t, cx, "ResolvePrivateNodesTypes")
+	semantics.AnalyzeSemantics(cx, pkg, importedSymbols)
+	assertNoDiagnostics(t, cx, "AnalyzeSemantics")
 	cfg := semantics.CreateControlFlowGraph(cx, pkg)
 	assertNoDiagnostics(t, cx, "CreateControlFlowGraph")
 	semantics.AnalyzeCFG(cx, pkg, cfg)
 	assertNoDiagnostics(t, cx, "AnalyzeCFG")
 	pkg = desugar.DesugarPackage(cx, pkg, importedSymbols)
-	return exported, bir.GenBir(cx, pkg)
+	return exported, birgen.GenBir(cx, pkg)
 }
 
 func assertNoDiagnostics(t *testing.T, cx *context.CompilerContext, stage string) {

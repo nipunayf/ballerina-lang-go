@@ -14,13 +14,14 @@
 // specific language governing permissions and limitations
 // under the License.
 
+// Package values has value representations use in runtime.
 package values
 
 import (
 	"strconv"
 
-	"ballerina-lang-go/decimal"
-	"ballerina-lang-go/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/decimal"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
 )
 
 // Currently this is just an alias on any but I think we will need to add methods to this like type
@@ -83,7 +84,7 @@ func fillerFactoryFromDesc(cx semtypes.Context, f semtypes.Filler) (FillerFactor
 	case semtypes.MappingFiller:
 		ty := f.Type
 		atomic := f.Atomic
-		readonly := semtypes.IsSubtype(cx, ty, semtypes.VAL_READONLY)
+		readonly := semtypes.IsSubtype(cx, ty, semtypes.ValReadonly)
 		return func() BalValue { return NewMap(ty, atomic, readonly, nil) }, true
 	case semtypes.ListFiller:
 		return listFillerFactory(cx, f)
@@ -107,7 +108,7 @@ func listFillerFactory(cx semtypes.Context, f semtypes.ListFiller) (FillerFactor
 	}
 	ty := f.Type
 	atomic := f.Atomic
-	readonly := semtypes.IsSubtype(cx, ty, semtypes.VAL_READONLY)
+	readonly := semtypes.IsSubtype(cx, ty, semtypes.ValReadonly)
 	restType := f.Atomic.Rest()
 	// Resolve the rest filler factory lazily so that recursive types (e.g.
 	// `type A A[]`) do not blow the stack while building the factory graph.
@@ -132,7 +133,7 @@ func listFillerFactory(cx semtypes.Context, f semtypes.ListFiller) (FillerFactor
 func SemTypeForValue(v BalValue) semtypes.SemType {
 	switch v := v.(type) {
 	case nil:
-		return semtypes.NIL
+		return semtypes.Nil
 	case bool:
 		return semtypes.BooleanConst(v)
 	case int64:
@@ -158,9 +159,9 @@ func SemTypeForValue(v BalValue) semtypes.SemType {
 	case XMLValue:
 		return v.Type()
 	case *TypeDesc:
-		return semtypes.TYPEDESC
+		return semtypes.Typedesc
 	default:
-		return semtypes.ANY
+		return semtypes.Any
 	}
 }
 

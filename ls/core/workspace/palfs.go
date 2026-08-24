@@ -21,7 +21,7 @@ import (
 	"io/fs"
 	"time"
 
-	"ballerina-lang-go/platform/pal"
+	"github.com/ballerina-nutcracker/ballerina/platform/pal"
 )
 
 // palFS is the overlay-augmented io/fs.FS the workspace builds at load time.

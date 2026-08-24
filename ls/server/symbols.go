@@ -20,9 +20,9 @@ import (
 	"context"
 	"encoding/json"
 
-	"ballerina-lang-go/ls/core/query"
-	"ballerina-lang-go/ls/core/uri"
-	"ballerina-lang-go/ls/protocol"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/query"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/uri"
+	"github.com/ballerina-nutcracker/ballerina/ls/protocol"
 )
 
 func (s *Server) handleDocumentSymbol(ctx context.Context, params json.RawMessage) trackedResult {

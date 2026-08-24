@@ -25,14 +25,15 @@ import (
 	"io/fs"
 	"strings"
 
-	"ballerina-lang-go/ast"
-	"ballerina-lang-go/context"
-	"ballerina-lang-go/lib/langlibs"
-	"ballerina-lang-go/lib/stdlibs"
-	"ballerina-lang-go/model"
-	"ballerina-lang-go/parser"
-	"ballerina-lang-go/semantics"
-	"ballerina-lang-go/tools/text"
+	"github.com/ballerina-nutcracker/ballerina/ast"
+	"github.com/ballerina-nutcracker/ballerina/context"
+	"github.com/ballerina-nutcracker/ballerina/lib/langlibs"
+	"github.com/ballerina-nutcracker/ballerina/lib/stdlibs"
+	"github.com/ballerina-nutcracker/ballerina/model"
+	"github.com/ballerina-nutcracker/ballerina/nodebuilder"
+	"github.com/ballerina-nutcracker/ballerina/parser"
+	"github.com/ballerina-nutcracker/ballerina/semantics"
+	"github.com/ballerina-nutcracker/ballerina/tools/text"
 )
 
 type bundledLib struct {
@@ -48,6 +49,14 @@ type bundledLib struct {
 }
 
 var migratedLangLibs = []bundledLib{
+	{
+		org:        "ballerina",
+		nameComps:  []string{"lang", "__internal"},
+		implicitID: "lang.__internal",
+		srcFS:      langlibs.FS,
+		balPath:    "ballerina/lang.__internal/0.0.1/any/lang.__internal.bal",
+		version:    "0.0.1",
+	},
 	{
 		org:        "ballerina",
 		nameComps:  []string{"lang", "int"},
@@ -163,18 +172,13 @@ var bundledStdlibs = []bundledLib{
 	},
 }
 
-// ImplicitImports returns the implicit-imports map for a hand-rolled compile
-// driver: the still-intrinsic langlibs from semantics.GetImplicitImports plus
-// the migrated lang libraries compiled into cx. Compilation happens in cx's
-// env so the returned symbol spaces resolve when the driver compiles user code
-// in the same context.
 type Symbols struct {
 	ImplicitImports map[string]model.ExportedSymbolSpace
 	PublicSymbols   map[semantics.PackageIdentifier]model.ExportedSymbolSpace
 }
 
 func Build(cx *context.CompilerContext, publicSymbols map[semantics.PackageIdentifier]model.ExportedSymbolSpace) (*Symbols, error) {
-	implicitImports := semantics.GetImplicitImports(cx)
+	implicitImports := make(map[string]model.ExportedSymbolSpace)
 	if publicSymbols == nil {
 		publicSymbols = make(map[semantics.PackageIdentifier]model.ExportedSymbolSpace)
 	}
@@ -249,7 +253,7 @@ func compileBundledLib(cx *context.CompilerContext, cache map[string]model.Expor
 	if err != nil {
 		return model.ExportedSymbolSpace{}, fmt.Errorf("langlib: parse %s: %w", lib.implicitID, err)
 	}
-	cu := ast.GetCompilationUnit(cx, syntaxTree)
+	cu := nodebuilder.GetCompilationUnit(cx, syntaxTree)
 	if cu == nil {
 		return model.ExportedSymbolSpace{}, fmt.Errorf("langlib: AST generation failed for %s", lib.implicitID)
 	}
@@ -261,17 +265,20 @@ func compileBundledLib(cx *context.CompilerContext, cache map[string]model.Expor
 	cu.SetPackageID(pkgID)
 	compilationUnits := []*ast.BLangCompilationUnit{cu}
 
-	// lang libraries do not themselves import migrated libs, so the
-	// still-intrinsic implicit imports are sufficient here.
-	importedByCU := semantics.ResolveCompilationUnitImports(cx, compilationUnits, semantics.GetImplicitImports(cx),
-		make(map[semantics.PackageIdentifier]model.ExportedSymbolSpace), lib.org)
-	pkgScope, exported := semantics.ResolveSymbols(cx, *pkgID, importedByCU)
-	pkg := ast.ToPackageFromCompilationUnits(compilationUnits)
+	// Bundled libraries do not import other modules.
+	pkgScope, exported, imported := semantics.ResolveSymbols(
+		cx,
+		*pkgID,
+		compilationUnits,
+		make(map[string]model.ExportedSymbolSpace),
+		make(map[semantics.PackageIdentifier]model.ExportedSymbolSpace),
+		lib.org,
+	)
+	pkg := nodebuilder.ToPackageFromCompilationUnits(compilationUnits)
 	pkg.PackageID = pkgID
 	pkg.Scope = pkgScope
 	pkg.Imports = nil
-	imported := importedByCU[0].Imports
-	semantics.ResolveTopLevelNodes(cx, pkg, imported)
+	semantics.ResolvePublicNodeTypes(cx, pkg, imported)
 	cache[lib.balPath] = exported
 	return exported, nil
 }

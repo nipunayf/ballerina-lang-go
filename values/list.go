@@ -17,7 +17,7 @@
 package values
 
 import (
-	"ballerina-lang-go/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
 	"math"
 	"strings"
 	"unsafe"

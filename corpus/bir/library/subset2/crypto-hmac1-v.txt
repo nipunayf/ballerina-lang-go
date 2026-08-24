@@ -18,28 +18,29 @@ main() -> nil|error{
     %15 = ConstantLoad 6
     %16 = newArray [int:Unsigned8...][%15]{%9, %10, %11, %12, %13, %14}
     key = %16;
-    %18 = hmacSha256(input,key) -> bb1;
+    %19 = hmacSha256(input,key) -> bb1;
   }
   bb1 {
-    $desugar$0 = %18;
-    %20 = $desugar$0 is error
+    %20 = %19 is error
     %20 ? bb2 : bb3;
   }
   bb2 {
-    PushScopeFrame 0
-    (1, %0) = (1, $desugar$0);
-    PopScopeFrame
+    %0 = %19;
     return;
   }
   bb3 {
-    mac = $desugar$0;
-    %22 = length(mac) -> bb4;
+    %18 = %19;
+    GOTO bb4;
   }
   bb4 {
-    %23 = %22;
-    %24 = println(%23) -> bb5;
+    mac = %18;
+    %22 = length(mac) -> bb5;
   }
   bb5 {
+    %23 = %22;
+    %24 = println(%23) -> bb6;
+  }
+  bb6 {
     return;
   }
 }

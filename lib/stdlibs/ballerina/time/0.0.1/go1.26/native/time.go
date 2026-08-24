@@ -23,11 +23,11 @@ import (
 	"strings"
 	"time"
 
-	"ballerina-lang-go/decimal"
-	"ballerina-lang-go/runtime"
-	"ballerina-lang-go/runtime/extern"
-	"ballerina-lang-go/semtypes"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/decimal"
+	"github.com/ballerina-nutcracker/ballerina/runtime"
+	"github.com/ballerina-nutcracker/ballerina/runtime/extern"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
 const (
@@ -105,7 +105,7 @@ func roundingUnit(precision int) int64 {
 
 // buildUtcTuple wraps epochSec and frac into a readonly [int, decimal] Ballerina tuple.
 func buildUtcTuple(utcTy semtypes.SemType, tc semtypes.Context, epochSec int64, frac *decimal.Decimal) *values.List {
-	atomic := semtypes.ToListAtomicType(tc, utcTy)
+	atomic := semtypes.ToListAtomicType(tc.Env(), utcTy)
 	items := []values.BalValue{epochSec, frac}
 	return values.NewList(utcTy, atomic, true, nil, 2, items)
 }
@@ -265,7 +265,7 @@ func civilToGoTime(m *values.Map) (time.Time, int, error) {
 // buildCivil constructs a Ballerina Civil map from a Go time.Time (always includes second field).
 // Matches Java's Civil.build().
 func buildCivil(tc semtypes.Context, t time.Time) *values.Map {
-	m := values.NewMap(semtypes.MAPPING, semtypes.ToMappingAtomicType(tc, semtypes.MAPPING), false, nil)
+	m := values.NewMap(semtypes.Mapping, semtypes.ToMappingAtomicType(tc, semtypes.Mapping), false, nil)
 	putCivilCommonFields(tc, m, t)
 	m.Put(tc, "second", timeToSecondDecimal(t))
 	return m
@@ -274,7 +274,7 @@ func buildCivil(tc semtypes.Context, t time.Time) *values.Map {
 // buildCivilWithZone constructs a Civil map, optionally including second and utcOffset.
 // Matches Java's Civil.buildWithZone().
 func buildCivilWithZone(tc semtypes.Context, t time.Time, includeSecond, includeOffset bool) *values.Map {
-	m := values.NewMap(semtypes.MAPPING, semtypes.ToMappingAtomicType(tc, semtypes.MAPPING), false, nil)
+	m := values.NewMap(semtypes.Mapping, semtypes.ToMappingAtomicType(tc, semtypes.Mapping), false, nil)
 	putCivilCommonFields(tc, m, t)
 	if includeSecond {
 		m.Put(tc, "second", timeToSecondDecimal(t))
@@ -321,7 +321,7 @@ func buildZoneOffset(tc semtypes.Context, totalOffsetSecs int) *values.Map {
 		sign = -1
 		totalOffsetSecs = -totalOffsetSecs
 	}
-	zm := values.NewMap(semtypes.MAPPING, semtypes.ToMappingAtomicType(tc, semtypes.MAPPING), false, nil)
+	zm := values.NewMap(semtypes.Mapping, semtypes.ToMappingAtomicType(tc, semtypes.Mapping), false, nil)
 	zm.Put(tc, "hours", int64(sign*(totalOffsetSecs/3600)))
 	zm.Put(tc, "minutes", int64(sign*((totalOffsetSecs%3600)/60)))
 	return zm
@@ -381,7 +381,7 @@ func emailOffsetStr(zh string) string {
 }
 
 func newFormatError(msg string) *values.Error {
-	return values.NewError(semtypes.ERROR, msg, nil, "FormatError", nil)
+	return values.NewError(semtypes.Error, msg, nil, "FormatError", nil)
 }
 
 func mapInt(m *values.Map, key string) int64 {
@@ -454,16 +454,17 @@ func civilMapToGoTimeInLocation(m *values.Map, loc *time.Location) (time.Time, e
 func initTimeModule(rt *runtime.Runtime) {
 	env := rt.GetTypeEnv()
 	utcBld := semtypes.NewListDefinition()
-	utcTy := utcBld.TupleTypeWrappedRo(env, semtypes.INT, semtypes.DECIMAL)
+	utcTy := utcBld.Define(env, []semtypes.SemType{semtypes.Int, semtypes.Decimal},
+		semtypes.ListMutability(semtypes.CellMutabilityNone))
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "externUtcNow",
 		func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 			precision := int(getInt64Arg(args, 0))
 			now := rt.Platform().Time.Now()
 			if precision < 0 {
-				return goTimeToUtc(utcTy, ctx.TypeCtx, now), nil
+				return goTimeToUtc(utcTy, ctx.TypeCtx(), now), nil
 			}
-			return goTimeToUtcWithPrecision(utcTy, ctx.TypeCtx, now, precision), nil
+			return goTimeToUtcWithPrecision(utcTy, ctx.TypeCtx(), now, precision), nil
 		})
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "externMonotonicNow",
@@ -482,7 +483,7 @@ func initTimeModule(rt *runtime.Runtime) {
 				return newFormatError(fmt.Sprintf(
 					"The provided string '%s' does not adhere to the expected RFC 3339 format 'YYYY-MM-DDTHH:MM:SS.SSZ'. ", str)), nil
 			}
-			return goTimeToUtc(utcTy, ctx.TypeCtx, t), nil
+			return goTimeToUtc(utcTy, ctx.TypeCtx(), t), nil
 		})
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "externUtcToString",
@@ -500,7 +501,7 @@ func initTimeModule(rt *runtime.Runtime) {
 				dur := time.Duration(decimalToNanos(seconds))
 				t = t.Add(dur)
 			}
-			return goTimeToUtc(utcTy, ctx.TypeCtx, t), nil
+			return goTimeToUtc(utcTy, ctx.TypeCtx(), t), nil
 		})
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "externUtcDiffSeconds",
@@ -548,7 +549,7 @@ func initTimeModule(rt *runtime.Runtime) {
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "externUtcToCivil",
 		func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 			utc, _ := args[0].(*values.List)
-			return buildCivil(ctx.TypeCtx, utcToGoTime(utc)), nil
+			return buildCivil(ctx.TypeCtx(), utcToGoTime(utc)), nil
 		})
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "externUtcFromCivil",
@@ -575,7 +576,7 @@ func initTimeModule(rt *runtime.Runtime) {
 			if err != nil {
 				return newFormatError(err.Error()), nil
 			}
-			return goTimeToUtc(utcTy, ctx.TypeCtx, t), nil
+			return goTimeToUtc(utcTy, ctx.TypeCtx(), t), nil
 		})
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "externCivilFromString",
@@ -593,9 +594,9 @@ func initTimeModule(rt *runtime.Runtime) {
 			}
 			hasSeconds := secondsHavePattern.MatchString(parseStr)
 			isUTCOnly := utcOnlyPattern.MatchString(parseStr)
-			result := buildCivilWithZone(ctx.TypeCtx, t, hasSeconds, !isUTCOnly)
+			result := buildCivilWithZone(ctx.TypeCtx(), t, hasSeconds, !isUTCOnly)
 			if ianaZone != "" {
-				result.Put(ctx.TypeCtx, "timeAbbrev", ianaZone)
+				result.Put(ctx.TypeCtx(), "timeAbbrev", ianaZone)
 			}
 			return result, nil
 		})
@@ -629,9 +630,9 @@ func initTimeModule(rt *runtime.Runtime) {
 			if err != nil {
 				return newFormatError(fmt.Sprintf("invalid email date-time string: %s", str)), nil
 			}
-			result := buildCivilWithZone(ctx.TypeCtx, t, true, true)
+			result := buildCivilWithZone(ctx.TypeCtx(), t, true, true)
 			if comment != "" {
-				result.Put(ctx.TypeCtx, "timeAbbrev", comment)
+				result.Put(ctx.TypeCtx(), "timeAbbrev", comment)
 			}
 			return result, nil
 		})
@@ -685,7 +686,7 @@ func initTimeModule(rt *runtime.Runtime) {
 				time.Duration(duMinute)*time.Minute +
 				time.Duration(decimalToNanos(duSecond)))
 
-			return buildCivil(ctx.TypeCtx, t), nil
+			return buildCivil(ctx.TypeCtx(), t), nil
 		})
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "TimeZone.initNative",
@@ -740,9 +741,9 @@ func initTimeModule(rt *runtime.Runtime) {
 				if err != nil {
 					return nil, nil
 				}
-				return buildZoneOffset(ctx.TypeCtx, offsetSecs), nil
+				return buildZoneOffset(ctx.TypeCtx(), offsetSecs), nil
 			case zoneId == "Z" || zoneId == "UTC":
-				return buildZoneOffset(ctx.TypeCtx, 0), nil
+				return buildZoneOffset(ctx.TypeCtx(), 0), nil
 			default:
 				return nil, nil
 			}
@@ -764,7 +765,7 @@ func initTimeModule(rt *runtime.Runtime) {
 			if err != nil {
 				return newFormatError(err.Error()), nil
 			}
-			return goTimeToUtc(utcTy, ctx.TypeCtx, t), nil
+			return goTimeToUtc(utcTy, ctx.TypeCtx(), t), nil
 		})
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "TimeZone.utcToCivil",
@@ -774,7 +775,7 @@ func initTimeModule(rt *runtime.Runtime) {
 
 			loc := getStoredLocation(self)
 			t := utcToGoTime(utc).In(loc)
-			return buildCivilWithZone(ctx.TypeCtx, t, true, true), nil
+			return buildCivilWithZone(ctx.TypeCtx(), t, true, true), nil
 		})
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "TimeZone.civilAddDuration",
@@ -802,7 +803,7 @@ func initTimeModule(rt *runtime.Runtime) {
 				time.Duration(duMinute)*time.Minute +
 				time.Duration(decimalToNanos(duSecond)))
 
-			return buildCivilWithZone(ctx.TypeCtx, t.In(loc), true, true), nil
+			return buildCivilWithZone(ctx.TypeCtx(), t.In(loc), true, true), nil
 		})
 }
 

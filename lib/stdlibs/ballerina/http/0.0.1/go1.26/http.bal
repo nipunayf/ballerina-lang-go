@@ -323,8 +323,8 @@ public class Response {
 
     # Returns the response body as a plain string.
     #
-    # + return - The response body as a `string`
-    public isolated function getTextPayload() returns string = external;
+    # + return - The response body as a `string`, or an `error` if extraction fails
+    public isolated function getTextPayload() returns string|error = external;
 
     # Parses the response body as JSON.
     #
@@ -505,6 +505,11 @@ public class Request {
 // `RequestMessage` are not supported in this implementation.
 public type RequestMessage json|Request;
 
+# Represents the types of the `targetType` parameter of the client remote methods.
+# The `stream<SseEvent, error?>` member of jBallerina's `TargetType` is not supported
+# in this implementation, since Server-Sent Events are not available.
+public type TargetType typedesc<Response|anydata>;
+
 // Represents HTTP methods.
 public enum Method {
     GET,
@@ -614,12 +619,18 @@ public isolated class Listener {
 #
 # The `mediaType` parameter overrides the inferred `Content-Type` in all cases.
 #
-# **Return type:** All methods return `Response|error`. Automatic data binding via
-# `targetType` is not supported — use `getTextPayload()`, `getJsonPayload()`, or
-# `getBinaryPayload()` to extract the response body.
+# **Return type:** Every method except `head` binds the response to the contextually
+# expected type through the `targetType` parameter. `http:Response` (or any union
+# containing it) yields the raw response; any other `anydata` type is deserialised from
+# the response body according to the `Content-Type` header. `xml` targets are not
+# supported. When there is no contextually expected type (for example when assigning to
+# `var`), pass the target explicitly: `c->get("/path", targetType = http:Response)`.
 #
 # **Error types:** Errors are plain `error` values. The upstream distinct error types
-# (`http:ClientError`, `http:HeaderNotFoundError`, etc.) are not declared.
+# (`http:ClientError`, `http:HeaderNotFoundError`, etc.) are not declared. When data
+# binding is active, a 4xx or 5xx response produces an `error` whose message is the
+# reason phrase, mirroring jBallerina's `http:ClientRequestError` and
+# `http:RemoteServerError`.
 public isolated client class Client {
 
     # Gets invoked to initialize the `client`. During initialization, the configurations
@@ -641,8 +652,12 @@ public isolated client class Client {
     #
     # + path - The request path (appended to the base URL)
     # + headers - Optional request headers as a `map<string|string[]>`
-    # + return - The `http:Response` or an `error` if the request fails
-    remote isolated function get(string path, map<string|string[]>? headers = ()) returns Response|error = external;
+    # + targetType - The expected return type, used for automatic data binding. Inferred from
+    #                the contextually expected type when not passed explicitly
+    # + return - The bound payload, the `http:Response`, or an `error` if the request or the
+    #            data binding fails
+    remote isolated function get(string path, map<string|string[]>? headers = (),
+            TargetType targetType = <>) returns targetType|error = external;
 
     # Creates a new resource or submits data to a resource for processing.
     #
@@ -650,9 +665,12 @@ public isolated client class Client {
     # + message - The request body (`string`, `byte[]`, JSON-compatible value, or `http:Request`)
     # + headers - Optional request headers as a `map<string|string[]>`
     # + mediaType - Optional `Content-Type` override; inferred from `message` if omitted
-    # + return - The `http:Response` or an `error` if the request fails
+    # + targetType - The expected return type, used for automatic data binding. Inferred from
+    #                the contextually expected type when not passed explicitly
+    # + return - The bound payload, the `http:Response`, or an `error` if the request or the
+    #            data binding fails
     remote isolated function post(string path, RequestMessage message, map<string|string[]>? headers = (),
-            string? mediaType = ()) returns Response|error = external;
+            string? mediaType = (), TargetType targetType = <>) returns targetType|error = external;
 
     # Creates a new resource or replaces a representation of the specified resource.
     #
@@ -660,9 +678,12 @@ public isolated client class Client {
     # + message - The request body (`string`, `byte[]`, JSON-compatible value, or `http:Request`)
     # + headers - Optional request headers as a `map<string|string[]>`
     # + mediaType - Optional `Content-Type` override; inferred from `message` if omitted
-    # + return - The `http:Response` or an `error` if the request fails
+    # + targetType - The expected return type, used for automatic data binding. Inferred from
+    #                the contextually expected type when not passed explicitly
+    # + return - The bound payload, the `http:Response`, or an `error` if the request or the
+    #            data binding fails
     remote isolated function put(string path, RequestMessage message, map<string|string[]>? headers = (),
-            string? mediaType = ()) returns Response|error = external;
+            string? mediaType = (), TargetType targetType = <>) returns targetType|error = external;
 
     # Applies a partial modification to the specified resource.
     #
@@ -670,9 +691,12 @@ public isolated client class Client {
     # + message - The request body (`string`, `byte[]`, JSON-compatible value, or `http:Request`)
     # + headers - Optional request headers as a `map<string|string[]>`
     # + mediaType - Optional `Content-Type` override; inferred from `message` if omitted
-    # + return - The `http:Response` or an `error` if the request fails
+    # + targetType - The expected return type, used for automatic data binding. Inferred from
+    #                the contextually expected type when not passed explicitly
+    # + return - The bound payload, the `http:Response`, or an `error` if the request or the
+    #            data binding fails
     remote isolated function patch(string path, RequestMessage message, map<string|string[]>? headers = (),
-            string? mediaType = ()) returns Response|error = external;
+            string? mediaType = (), TargetType targetType = <>) returns targetType|error = external;
 
     # Deletes the specified resource.
     #
@@ -680,12 +704,16 @@ public isolated client class Client {
     # + message - Optional request body (`string`, `byte[]`, JSON-compatible value, or `http:Request`)
     # + headers - Optional request headers as a `map<string|string[]>`
     # + mediaType - Optional `Content-Type` override; inferred from `message` if omitted
-    # + return - The `http:Response` or an `error` if the request fails
+    # + targetType - The expected return type, used for automatic data binding. Inferred from
+    #                the contextually expected type when not passed explicitly
+    # + return - The bound payload, the `http:Response`, or an `error` if the request or the
+    #            data binding fails
     remote isolated function delete(string path, RequestMessage? message = (), map<string|string[]>? headers = (),
-            string? mediaType = ()) returns Response|error = external;
+            string? mediaType = (), TargetType targetType = <>) returns targetType|error = external;
 
     # Requests headers from the specified resource without fetching the response body.
-    # Identical to `get` but the server must not return a message body.
+    # Identical to `get` but the server must not return a message body. Since a `head`
+    # response carries no body, this method has no `targetType` parameter.
     #
     # + path - The request path (appended to the base URL)
     # + headers - Optional request headers as a `map<string|string[]>`
@@ -696,8 +724,12 @@ public isolated client class Client {
     #
     # + path - The request path (appended to the base URL)
     # + headers - Optional request headers as a `map<string|string[]>`
-    # + return - The `http:Response` or an `error` if the request fails
-    remote isolated function options(string path, map<string|string[]>? headers = ()) returns Response|error = external;
+    # + targetType - The expected return type, used for automatic data binding. Inferred from
+    #                the contextually expected type when not passed explicitly
+    # + return - The bound payload, the `http:Response`, or an `error` if the request or the
+    #            data binding fails
+    remote isolated function options(string path, map<string|string[]>? headers = (),
+            TargetType targetType = <>) returns targetType|error = external;
 
     # Sends an HTTP request with an explicit verb to the specified path.
     # Use this for HTTP methods not covered by the dedicated remote functions.
@@ -707,9 +739,13 @@ public isolated client class Client {
     # + message - The request body (`string`, `byte[]`, JSON-compatible value, or `http:Request`)
     # + headers - Optional request headers as a `map<string|string[]>`
     # + mediaType - Optional `Content-Type` override; inferred from `message` if omitted
-    # + return - The `http:Response` or an `error` if the request fails
+    # + targetType - The expected return type, used for automatic data binding. Inferred from
+    #                the contextually expected type when not passed explicitly
+    # + return - The bound payload, the `http:Response`, or an `error` if the request or the
+    #            data binding fails
     remote isolated function execute(string httpVerb, string path, RequestMessage message,
-            map<string|string[]>? headers = (), string? mediaType = ()) returns Response|error = external;
+            map<string|string[]>? headers = (), string? mediaType = (),
+            TargetType targetType = <>) returns targetType|error = external;
 
     # Forwards the inbound `Request` to the specified path, preserving the original HTTP method,
     # headers, and body. Useful for proxy and gateway patterns where the incoming request must be
@@ -717,6 +753,10 @@ public isolated client class Client {
     #
     # + path    - The request path (appended to the base URL)
     # + request - The inbound `http:Request` whose method, headers, and body are forwarded
-    # + return  - The `http:Response` from the upstream service, or an `error` if the request fails
-    remote isolated function forward(string path, Request request) returns Response|error = external;
+    # + targetType - The expected return type, used for automatic data binding. Inferred from
+    #                the contextually expected type when not passed explicitly
+    # + return  - The bound payload, the `http:Response` from the upstream service, or an `error`
+    #             if the request or the data binding fails
+    remote isolated function forward(string path, Request request,
+            TargetType targetType = <>) returns targetType|error = external;
 }

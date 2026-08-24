@@ -1,4 +1,4 @@
-(compilation-unit  regular-source
+(compilation-unit
 (package-id $anon . 0.0.0)
   (import-package ballerina http (as http))
   (import-package ballerina io (as io))
@@ -14,7 +14,8 @@
             (new (
               (literal https://example.com)))))))
       (var-def
-        (variable r (expr
+        (variable r (type
+          (user-defined-type http Response)) (expr
           (checked-expr
             (remote-method-call post expr:
               (simple-var-ref c) (
@@ -25,7 +26,8 @@
           (field-based-access statusCode
             (simple-var-ref r)))))
       (var-def
-        (variable r2 (expr
+        (variable r2 (type
+          (user-defined-type http Response)) (expr
           (checked-expr
             (remote-method-call post expr:
               (simple-var-ref c) (
@@ -38,7 +40,8 @@
           (field-based-access statusCode
             (simple-var-ref r2)))))
       (var-def
-        (variable r3 (expr
+        (variable r3 (type
+          (user-defined-type http Response)) (expr
           (checked-expr
             (remote-method-call post expr:
               (simple-var-ref c) (

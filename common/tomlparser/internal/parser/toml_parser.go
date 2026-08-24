@@ -24,10 +24,10 @@ import (
 	"strconv"
 	"strings"
 
-	"ballerina-lang-go/common/tomlparser/internal/ast"
-	"ballerina-lang-go/common/tomlparser/internal/lexer"
-	"ballerina-lang-go/tools/diagnostics"
-	"ballerina-lang-go/tools/text"
+	"github.com/ballerina-nutcracker/ballerina/common/tomlparser/internal/ast"
+	"github.com/ballerina-nutcracker/ballerina/common/tomlparser/internal/lexer"
+	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
+	"github.com/ballerina-nutcracker/ballerina/tools/text"
 )
 
 // Parser is a recursive-descent LL(k) parser for TOML.

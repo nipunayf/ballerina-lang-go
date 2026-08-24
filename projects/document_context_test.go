@@ -20,8 +20,8 @@ import (
 	"sync"
 	"testing"
 
-	compilercontext "ballerina-lang-go/context"
-	"ballerina-lang-go/semtypes"
+	compilercontext "github.com/ballerina-nutcracker/ballerina/context"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
 )
 
 func TestSyntaxTreeRecordsCachedParseDurationOnce(t *testing.T) {

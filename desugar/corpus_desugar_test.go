@@ -23,13 +23,13 @@ import (
 	"strings"
 	"testing"
 
-	"ballerina-lang-go/ast"
-	"ballerina-lang-go/context"
-	"ballerina-lang-go/desugar"
-	"ballerina-lang-go/semtypes"
-	"ballerina-lang-go/test_util"
-	"ballerina-lang-go/test_util/testphases"
-	"ballerina-lang-go/tools/diagnostics"
+	"github.com/ballerina-nutcracker/ballerina/ast"
+	"github.com/ballerina-nutcracker/ballerina/context"
+	"github.com/ballerina-nutcracker/ballerina/desugar"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/test_util"
+	"github.com/ballerina-nutcracker/ballerina/test_util/testphases"
+	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
 
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
@@ -69,7 +69,7 @@ func (v *walkTestVisitor) Visit(node ast.BLangNode) ast.Visitor {
 	}
 
 	switch n := node.(type) {
-	case *ast.BLangSimpleVariable:
+	case *ast.BLangVariable:
 		v.checkSymbolLocation(n)
 	case *ast.BLangFunction:
 		name := n.Name.GetValue()

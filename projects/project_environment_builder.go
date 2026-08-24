@@ -19,9 +19,9 @@ package projects
 import (
 	"io/fs"
 
-	"ballerina-lang-go/context"
-	"ballerina-lang-go/lib/langlibs"
-	"ballerina-lang-go/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/context"
+	"github.com/ballerina-nutcracker/ballerina/lib/langlibs"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
 )
 
 type ProjectEnvironmentBuilder struct {

@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"ballerina-lang-go/platform/pal"
+	"github.com/ballerina-nutcracker/ballerina/platform/pal"
 )
 
 func TestSignalSourceMapsCtrlCToGracefulStop(t *testing.T) {

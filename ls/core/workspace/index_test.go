@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"ballerina-lang-go/ls/core/event"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/event"
 )
 
 // makeEntry builds an indexEntry stand-in for index unit tests (the index only

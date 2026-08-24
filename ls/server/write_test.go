@@ -22,7 +22,7 @@ import (
 	"sync"
 	"testing"
 
-	"ballerina-lang-go/ls/protocol"
+	"github.com/ballerina-nutcracker/ballerina/ls/protocol"
 )
 
 // TestWriteSerializesConcurrentFrames verifies writeMu serializes framed

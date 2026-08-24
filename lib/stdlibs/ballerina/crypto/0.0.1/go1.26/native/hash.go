@@ -25,9 +25,9 @@ import (
 	"hash"
 	"hash/crc32"
 
-	"ballerina-lang-go/runtime"
-	"ballerina-lang-go/runtime/extern"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/runtime"
+	"github.com/ballerina-nutcracker/ballerina/runtime/extern"
+	"github.com/ballerina-nutcracker/ballerina/values"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -69,6 +69,6 @@ func hashFunc(newHash func() hash.Hash, types cryptoTypes) extern.NativeFunc {
 			h.Write(salt)
 		}
 		h.Write(input)
-		return values.ByteSliceToList(types.byteArrTy, ctx.TypeCtx, h.Sum(nil)), nil
+		return values.ByteSliceToList(types.byteArrTy, ctx.TypeEnv(), h.Sum(nil)), nil
 	}
 }

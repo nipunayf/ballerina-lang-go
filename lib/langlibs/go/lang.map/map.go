@@ -17,10 +17,10 @@
 package maprt
 
 import (
-	"ballerina-lang-go/runtime"
-	"ballerina-lang-go/runtime/extern"
-	"ballerina-lang-go/semtypes"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/runtime"
+	"github.com/ballerina-nutcracker/ballerina/runtime/extern"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
 const (
@@ -35,7 +35,7 @@ func mapLength(_ *extern.Context, args []values.BalValue) (values.BalValue, erro
 
 func mapKeys(env semtypes.Env) extern.NativeFunc {
 	ld := semtypes.NewListDefinition()
-	stringArrayTy := ld.DefineListTypeWrappedWithEnvSemType(env, semtypes.STRING)
+	stringArrayTy := ld.Define(env, nil, semtypes.ListRest(semtypes.String))
 	return func(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 		m := args[0].(*values.Map)
 		keys := m.Keys()
@@ -43,7 +43,7 @@ func mapKeys(env semtypes.Env) extern.NativeFunc {
 		for i, k := range keys {
 			items[i] = k
 		}
-		atomic := semtypes.ToListAtomicType(ctx.TypeCtx, stringArrayTy)
+		atomic := semtypes.ToListAtomicType(ctx.TypeEnv(), stringArrayTy)
 		list := values.NewList(stringArrayTy, atomic, false, nil, 0, items)
 		return list, nil
 	}
@@ -53,7 +53,7 @@ func mapRemove(ctx *extern.Context, args []values.BalValue) (values.BalValue, er
 	m := args[0].(*values.Map)
 	key := args[1].(string)
 	val, _ := m.Get(key)
-	m.Delete(ctx.TypeCtx, key)
+	m.Delete(ctx.TypeCtx(), key)
 	return val, nil
 }
 

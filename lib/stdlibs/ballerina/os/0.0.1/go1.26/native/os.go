@@ -17,13 +17,13 @@
 package native
 
 import (
-	"ballerina-lang-go/bir"
-	"ballerina-lang-go/model"
-	"ballerina-lang-go/platform/pal"
-	"ballerina-lang-go/runtime"
-	"ballerina-lang-go/runtime/extern"
-	"ballerina-lang-go/semtypes"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/bir"
+	"github.com/ballerina-nutcracker/ballerina/model"
+	"github.com/ballerina-nutcracker/ballerina/platform/pal"
+	"github.com/ballerina-nutcracker/ballerina/runtime"
+	"github.com/ballerina-nutcracker/ballerina/runtime/extern"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
 const (
@@ -33,13 +33,14 @@ const (
 
 func newProcessObject(handle pal.ProcessHandle) *values.Object {
 	return values.NewObject(
-		semtypes.OBJECT,
+		semtypes.Object,
 		map[string]values.BalValue{"$handle": handle},
 		map[string]string{
 			"waitForExit": "ballerina/os:Process.waitForExit",
 			"output":      "ballerina/os:Process.output",
 			"exit":        "ballerina/os:Process.exit",
 		},
+		nil,
 		nil,
 	)
 }
@@ -67,15 +68,15 @@ func initOSModule(rt *runtime.Runtime) {
 
 	env := rt.GetTypeEnv()
 	bld := semtypes.NewListDefinition()
-	byteArrTy := bld.DefineListTypeWrappedWithEnvSemType(env, semtypes.BYTE)
+	byteArrTy := bld.Define(env, nil, semtypes.ListRest(semtypes.Byte))
 	smd := semtypes.NewMappingDefinition()
-	strMapTy := smd.DefineMappingTypeWrapped(env, nil, semtypes.STRING)
+	strMapTy := smd.Define(env, nil, semtypes.String)
 
 	// Atomic types are a structural property of the (fixed) SemTypes above and
 	// do not vary per strand, so compute them once instead of on every call.
 	initCtx := semtypes.ContextFrom(env)
 	strMapAtomic := semtypes.ToMappingAtomicType(initCtx, strMapTy)
-	byteArrAtomic := semtypes.ToListAtomicType(initCtx, byteArrTy)
+	byteArrAtomic := semtypes.ToListAtomicType(env, byteArrTy)
 
 	runtime.RegisterExternFunction(rt, orgName, moduleName, "getEnv",
 		func(_ *extern.Context, args []values.BalValue) (values.BalValue, error) {
@@ -118,7 +119,7 @@ func initOSModule(rt *runtime.Runtime) {
 			envMap := rt.Platform().OS.ListEnv()
 			m := values.NewMap(strMapTy, strMapAtomic, false, nil)
 			for k, v := range envMap {
-				m.Put(ctx.TypeCtx, k, v)
+				m.Put(ctx.TypeCtx(), k, v)
 			}
 			return m, nil
 		})

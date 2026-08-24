@@ -19,14 +19,15 @@ package values
 import (
 	"strings"
 
-	"ballerina-lang-go/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
 )
 
 type Object struct {
-	Type       semtypes.SemType
-	fields     map[string]BalValue
-	methodKeys map[string]string
-	rtable     map[string][]ResourceEntry
+	Type        semtypes.SemType
+	fields      map[string]BalValue
+	methodKeys  map[string]string
+	rtable      map[string][]ResourceEntry
+	annotations AnnotationValues
 }
 
 type ResourceEntry struct {
@@ -52,7 +53,7 @@ func LiteralPathSegment(seg ResourcePathSegmentDef) (string, bool) {
 	return s, ok
 }
 
-func NewObject(typ semtypes.SemType, fieldValues map[string]BalValue, methodKeys map[string]string, rtable map[string][]ResourceEntry) *Object {
+func NewObject(typ semtypes.SemType, fieldValues map[string]BalValue, methodKeys map[string]string, rtable map[string][]ResourceEntry, annotations AnnotationValues) *Object {
 	if fieldValues == nil {
 		fieldValues = make(map[string]BalValue)
 	}
@@ -62,12 +63,22 @@ func NewObject(typ semtypes.SemType, fieldValues map[string]BalValue, methodKeys
 	if rtable == nil {
 		rtable = make(map[string][]ResourceEntry)
 	}
-	return &Object{
-		Type:       typ,
-		fields:     fieldValues,
-		methodKeys: methodKeys,
-		rtable:     rtable,
+	if annotations == nil {
+		annotations = NewAnnotationValues()
 	}
+	return &Object{
+		Type:        typ,
+		fields:      fieldValues,
+		methodKeys:  methodKeys,
+		rtable:      rtable,
+		annotations: annotations,
+	}
+}
+
+// AnnotationValues returns the runtime-visible annotations on the object's
+// class or service declaration.
+func (o *Object) AnnotationValues() AnnotationValues {
+	return o.annotations
 }
 
 func (o *Object) ResourceEntries(methodName string) ([]ResourceEntry, bool) {

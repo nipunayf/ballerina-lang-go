@@ -7,32 +7,24 @@
       (value-type null)))
     (block-function-body
       (var-def
-        (variable $desugar$0 (expr
-          (invocation time utcFromString (
-            (literal 2024-06-15T10:30:45.00Z))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$0))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$0))) ())
-      (var-def
         (variable utc (type
           (user-defined-type time Utc)) (expr
-          (simple-var-ref $desugar$0))))
+          (checked-expr
+            (invocation time utcFromString (
+              (literal 2024-06-15T10:30:45.00Z)))))))
       (var-def
-        (variable $desugar$1 (expr
+        (variable $desugar$0 (expr
           (simple-var-ref utc))))
       (var-def
-        (variable $desugar$2 (expr
+        (variable $desugar$1 (expr
           (invocation $default$2 (
-            (simple-var-ref $desugar$1))))))
+            (simple-var-ref $desugar$0))))))
       (var-def
         (variable emailStr (type
           (value-type string)) (expr
           (invocation time utcToEmailString (
-            (simple-var-ref $desugar$1)
-            (simple-var-ref $desugar$2))))))
+            (simple-var-ref $desugar$0)
+            (simple-var-ref $desugar$1))))))
       (expression-stmt
         (invocation io println (
           (simple-var-ref emailStr))))
@@ -82,34 +74,18 @@
             (simple-var-ref bad)
             (error-type)))))
       (var-def
-        (variable $desugar$3 (expr
-          (new
-            (user-defined-type time TimeZone) (
-            (literal +00:00))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$3))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$3))) ())
-      (var-def
         (variable tz (type
           (user-defined-type time TimeZone)) (expr
-          (simple-var-ref $desugar$3))))
-      (var-def
-        (variable $desugar$4 (expr
-          (invocation time utcFromString (
-            (literal 2024-06-15T10:30:45.00Z))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$4))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$4))) ())
+          (checked-expr
+            (new
+              (user-defined-type time TimeZone) (
+              (literal +00:00)))))))
       (var-def
         (variable utcBase (type
           (user-defined-type time Utc)) (expr
-          (simple-var-ref $desugar$4))))
+          (checked-expr
+            (invocation time utcFromString (
+              (literal 2024-06-15T10:30:45.00Z)))))))
       (var-def
         (variable civil (type
           (user-defined-type time Civil)) (expr

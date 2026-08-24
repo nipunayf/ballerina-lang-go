@@ -21,8 +21,8 @@ package parser
 import (
 	"fmt"
 
-	"ballerina-lang-go/common/tomlparser/internal/lexer"
-	"ballerina-lang-go/tools/diagnostics"
+	"github.com/ballerina-nutcracker/ballerina/common/tomlparser/internal/lexer"
+	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
 )
 
 // ParseError is a semantic or syntactic error produced during parsing.

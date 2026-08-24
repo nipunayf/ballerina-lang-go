@@ -26,23 +26,15 @@
   (function bar () (
     (value-type int))
     (block-function-body
-      (var-def
-        (variable $desugar$0 (expr
+      (return
+        (check-panicked-expr
           (invocation foo (
             (index-based-access
               (simple-var-ref vals)
               (literal 0))
             (index-based-access
               (simple-var-ref vals)
-              (literal 1)))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$0))
-        (block-stmt
-          (panic
-            (simple-var-ref $desugar$0))) ())
-      (return
-        (simple-var-ref $desugar$0))))
+              (literal 1))))))))
   (function foo () (
     (union-type
       (value-type int)
@@ -53,18 +45,21 @@
           (value-type int)) (expr
           (literal 0))))
       (var-def
-        (variable i (type
-          (value-type int)) (expr
+        (variable $desugar$0 (expr
           (literal 0))))
       (var-def
-        (variable $desugar$0 (expr
+        (variable $desugar$1 (expr
           (invocation lang.array length (
             (simple-var-ref vals))))))
       (while
         (binary-expr <
-          (simple-var-ref i)
-          (simple-var-ref $desugar$0))
+          (simple-var-ref $desugar$0)
+          (simple-var-ref $desugar$1))
         (block-stmt
+          (var-def
+            (variable i (type
+              (value-type int)) (expr
+              (simple-var-ref $desugar$0))))
           (var-def
             (variable val (type
               (value-type int)) (expr
@@ -84,9 +79,9 @@
               (simple-var-ref sum)
               (simple-var-ref val)))
           (assignment
-            (simple-var-ref i)
+            (simple-var-ref $desugar$0)
             (binary-expr +
-              (simple-var-ref i)
+              (simple-var-ref $desugar$0)
               (numeric-literal 1)))))
       (return
         (simple-var-ref sum)))))

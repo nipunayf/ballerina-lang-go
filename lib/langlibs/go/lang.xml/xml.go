@@ -17,10 +17,10 @@
 package xml
 
 import (
-	"ballerina-lang-go/runtime"
-	"ballerina-lang-go/runtime/extern"
-	"ballerina-lang-go/semtypes"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/runtime"
+	"github.com/ballerina-nutcracker/ballerina/runtime/extern"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
 const (
@@ -36,12 +36,12 @@ func initXMLModule(rt *runtime.Runtime) {
 
 func xmlIterator(_ *extern.Context, args []values.BalValue) (values.BalValue, error) {
 	x, _ := args[0].(values.XMLValue)
-	return values.NewObject(semtypes.OBJECT, map[string]values.BalValue{
+	return values.NewObject(semtypes.Object, map[string]values.BalValue{
 		"items": x.IterItems(),
 		"idx":   int64(0),
 	}, map[string]string{
 		"next": orgName + "/" + moduleName + ":" + nextMethodName,
-	}, nil), nil
+	}, nil, nil), nil
 }
 
 func xmlIteratorNext(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
@@ -54,8 +54,8 @@ func xmlIteratorNext(ctx *extern.Context, args []values.BalValue) (values.BalVal
 		return nil, nil
 	}
 	it.Put("idx", idx+1)
-	recordTy := xmlIteratorNextRecordType(ctx.Env.TypeEnv)
-	return values.NewMap(recordTy, semtypes.ToMappingAtomicType(ctx.TypeCtx, recordTy), false, []values.MapEntry{{
+	recordTy := xmlIteratorNextRecordType(ctx.TypeEnv())
+	return values.NewMap(recordTy, semtypes.ToMappingAtomicType(ctx.TypeCtx(), recordTy), false, []values.MapEntry{{
 		Key:   "value",
 		Value: items[idx],
 	}}), nil
@@ -63,9 +63,9 @@ func xmlIteratorNext(ctx *extern.Context, args []values.BalValue) (values.BalVal
 
 func xmlIteratorNextRecordType(env semtypes.Env) semtypes.SemType {
 	def := semtypes.NewMappingDefinition()
-	return def.DefineMappingTypeWrapped(env,
+	return def.Define(env,
 		[]semtypes.Field{semtypes.FieldFrom("value", semtypes.XML, false, false)},
-		semtypes.NEVER)
+		semtypes.Never)
 }
 
 func init() {

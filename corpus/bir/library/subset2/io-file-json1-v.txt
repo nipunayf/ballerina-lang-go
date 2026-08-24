@@ -9,47 +9,49 @@ main() -> nil|error{
     %6 = ConstantLoad 30
     %7 = newMap {| json... |}{%3=%4, %5=%6}
     data = %7;
-    %9 = fileWriteJson(path,data) -> bb1;
+    %10 = fileWriteJson(path,data) -> bb1;
   }
   bb1 {
-    $desugar$0 = %9;
-    %11 = $desugar$0 is error
+    %11 = %10 is error
     %11 ? bb2 : bb3;
   }
   bb2 {
-    PushScopeFrame 0
-    (1, %0) = (1, $desugar$0);
-    PopScopeFrame
+    %0 = %10;
     return;
   }
   bb3 {
-    %12 = fileReadJson(path) -> bb4;
+    %9 = %10;
+    GOTO bb4;
   }
   bb4 {
-    $desugar$1 = %12;
-    %14 = $desugar$1 is error
-    %14 ? bb5 : bb6;
+    %13 = fileReadJson(path) -> bb5;
   }
   bb5 {
-    PushScopeFrame 0
-    (1, %0) = (1, $desugar$1);
-    PopScopeFrame
-    return;
+    %14 = %13 is error
+    %14 ? bb6 : bb7;
   }
   bb6 {
-    result = $desugar$1;
+    %0 = %13;
+    return;
+  }
+  bb7 {
+    %12 = %13;
+    GOTO bb8;
+  }
+  bb8 {
+    result = %12;
     %16 = <{| json... |}>(result)
     m = %16;
     %19 = ConstantLoad name
     %18 = m[%19];
-    %20 = println(%18) -> bb7;
+    %20 = println(%18) -> bb9;
   }
-  bb7 {
+  bb9 {
     %22 = ConstantLoad age
     %21 = m[%22];
-    %23 = println(%21) -> bb8;
+    %23 = println(%21) -> bb10;
   }
-  bb8 {
+  bb10 {
     return;
   }
 }

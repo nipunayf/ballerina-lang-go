@@ -1,45 +1,47 @@
 module $anon.. v 0.0.0;
 main() -> nil|error{
   bb0 {
-    %1 = ConstantLoad BAL_TEST_VAR
-    %2 = ConstantLoad hello
-    %3 = setEnv(%1,%2) -> bb1;
+    %2 = ConstantLoad BAL_TEST_VAR
+    %3 = ConstantLoad hello
+    %4 = setEnv(%2,%3) -> bb1;
   }
   bb1 {
-    $desugar$0 = %3;
-    %5 = $desugar$0 is error
+    %5 = %4 is error
     %5 ? bb2 : bb3;
   }
   bb2 {
-    PushScopeFrame 0
-    (1, %0) = (1, $desugar$0);
-    PopScopeFrame
+    %0 = %4;
     return;
   }
   bb3 {
-    %6 = ConstantLoad BAL_TEST_VAR
-    %7 = getEnv(%6) -> bb4;
+    %1 = %4;
+    GOTO bb4;
   }
   bb4 {
-    v = %7;
-    %9 = println(v) -> bb5;
+    %6 = ConstantLoad BAL_TEST_VAR
+    %7 = getEnv(%6) -> bb5;
   }
   bb5 {
-    %10 = ConstantLoad BAL_TEST_VAR
-    %11 = unsetEnv(%10) -> bb6;
+    v = %7;
+    %9 = println(v) -> bb6;
   }
   bb6 {
-    $desugar$1 = %11;
-    %13 = $desugar$1 is error
-    %13 ? bb7 : bb8;
+    %11 = ConstantLoad BAL_TEST_VAR
+    %12 = unsetEnv(%11) -> bb7;
   }
   bb7 {
-    PushScopeFrame 0
-    (1, %0) = (1, $desugar$1);
-    PopScopeFrame
-    return;
+    %13 = %12 is error
+    %13 ? bb8 : bb9;
   }
   bb8 {
+    %0 = %12;
+    return;
+  }
+  bb9 {
+    %10 = %12;
+    GOTO bb10;
+  }
+  bb10 {
     return;
   }
 }

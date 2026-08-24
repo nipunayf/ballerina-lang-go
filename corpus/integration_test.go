@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -28,24 +27,26 @@ import (
 	"strings"
 	"testing"
 
-	"ballerina-lang-go/ast"
-	"ballerina-lang-go/bir"
-	bircodec "ballerina-lang-go/bir/codec"
-	"ballerina-lang-go/context"
-	"ballerina-lang-go/desugar"
-	"ballerina-lang-go/model"
-	"ballerina-lang-go/model/symbolpool"
-	"ballerina-lang-go/parser"
-	"ballerina-lang-go/projects"
-	"ballerina-lang-go/runtime"
-	"ballerina-lang-go/semantics"
-	"ballerina-lang-go/semtypes"
-	"ballerina-lang-go/test_util"
-	"ballerina-lang-go/test_util/langlib"
-	"ballerina-lang-go/test_util/testharness"
-	"ballerina-lang-go/tools/text"
+	"github.com/ballerina-nutcracker/ballerina/ast"
+	"github.com/ballerina-nutcracker/ballerina/bir"
+	bircodec "github.com/ballerina-nutcracker/ballerina/bir/codec"
+	"github.com/ballerina-nutcracker/ballerina/birgen"
+	"github.com/ballerina-nutcracker/ballerina/context"
+	"github.com/ballerina-nutcracker/ballerina/desugar"
+	"github.com/ballerina-nutcracker/ballerina/model"
+	"github.com/ballerina-nutcracker/ballerina/model/symbolpool"
+	"github.com/ballerina-nutcracker/ballerina/nodebuilder"
+	"github.com/ballerina-nutcracker/ballerina/parser"
+	"github.com/ballerina-nutcracker/ballerina/projects"
+	"github.com/ballerina-nutcracker/ballerina/runtime"
+	"github.com/ballerina-nutcracker/ballerina/semantics"
+	"github.com/ballerina-nutcracker/ballerina/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/test_util"
+	"github.com/ballerina-nutcracker/ballerina/test_util/langlib"
+	"github.com/ballerina-nutcracker/ballerina/test_util/testharness"
+	"github.com/ballerina-nutcracker/ballerina/tools/text"
 
-	_ "ballerina-lang-go/lib/rt"
+	_ "github.com/ballerina-nutcracker/ballerina/lib/rt"
 )
 
 const (
@@ -80,15 +81,13 @@ var (
 		// once that's registered in DiagnosticEnv).
 		"project/missing-package-e",
 		"project/parse-error-e",
-		// Pre-existing -fp.bal test that does not currently surface a runtime
+		// Pre-existing future test that does not currently surface a runtime
 		// panic or a compile-time `fatal[...]` bailout, so it does not satisfy
 		// the future-test contract yet. Tracked separately.
 		"subset8/08-future/fieldlvalue1-fp.bal",
-		// https://github.com/ballerina-platform/ballerina-lang-go/issues/417
-		"subset8/08-xml/namespace12-v.bal",
-		// https://github.com/ballerina-platform/ballerina-lang-go/issues/533
+		// https://github.com/ballerina-nutcracker/ballerina/issues/533
 		"subset9/09-template-expr/template-query-xml-sequence-fv.bal",
-		// https://github.com/ballerina-platform/ballerina-lang-go/issues/538
+		// https://github.com/ballerina-nutcracker/ballerina/issues/538
 		"subset9/09-object/readonly-distinct-object-fe.bal",
 	}
 
@@ -615,7 +614,7 @@ func compileModuleFromSource(env *context.CompilerEnvironment, project projects.
 		if err != nil {
 			return nil, fmt.Errorf("parsing %s: %v", relPath, err)
 		}
-		cu := ast.GetCompilationUnit(cx, st)
+		cu := nodebuilder.GetCompilationUnit(cx, st)
 		syntaxTrees = append(syntaxTrees, cu)
 	}
 
@@ -641,32 +640,32 @@ func compileModuleFromSource(env *context.CompilerEnvironment, project projects.
 	if err != nil {
 		return nil, fmt.Errorf("loading lang libraries failed: %w", err)
 	}
-	importedSymbolsByCU := semantics.ResolveCompilationUnitImports(cx, syntaxTrees, langlibs.ImplicitImports, langlibs.PublicSymbols, defaultOrg)
-	pkgScope, _ := semantics.ResolveSymbols(cx, *pkgID, importedSymbolsByCU)
+	pkgScope, _, importedSymbols := semantics.ResolveSymbols(
+		cx,
+		*pkgID,
+		syntaxTrees,
+		langlibs.ImplicitImports,
+		langlibs.PublicSymbols,
+		defaultOrg,
+	)
 	if cx.HasDiagnostics() {
 		return nil, fmt.Errorf("symbol resolution failed")
 	}
-	pkg := ast.ToPackageFromCompilationUnits(syntaxTrees)
+	pkg := nodebuilder.ToPackageFromCompilationUnits(syntaxTrees)
 	pkg.Imports = nil
 	pkg.PackageID = pkgID
 	pkg.Scope = pkgScope
-	importedSymbols := make(map[string]model.ExportedSymbolSpace)
-	for _, cuImports := range importedSymbolsByCU {
-		maps.Copy(importedSymbols, cuImports.Imports)
-	}
-
-	semantics.ResolveTopLevelNodes(cx, pkg, importedSymbols)
+	semantics.ResolvePublicNodeTypes(cx, pkg, importedSymbols)
 	if cx.HasDiagnostics() {
 		return nil, fmt.Errorf("top-level type resolution failed")
 	}
 
-	semantics.ResolveLocalNodes(cx, pkg, importedSymbols)
+	semantics.ResolvePrivateNodesTypes(cx, pkg, importedSymbols)
 	if cx.HasDiagnostics() {
 		return nil, fmt.Errorf("local type resolution failed")
 	}
 
-	analyzer := semantics.NewSemanticAnalyzer(cx)
-	analyzer.Analyze(pkg, importedSymbols)
+	semantics.AnalyzeSemantics(cx, pkg, importedSymbols)
 	if cx.HasDiagnostics() {
 		return nil, fmt.Errorf("semantic analysis failed")
 	}
@@ -683,7 +682,7 @@ func compileModuleFromSource(env *context.CompilerEnvironment, project projects.
 
 	pkg = desugar.DesugarPackage(cx, pkg, importedSymbols)
 
-	return bir.GenBir(cx, pkg), nil
+	return birgen.GenBir(cx, pkg), nil
 }
 
 func BenchmarkIntegration(b *testing.B) {

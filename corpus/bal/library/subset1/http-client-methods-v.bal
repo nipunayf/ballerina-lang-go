@@ -20,22 +20,22 @@ import ballerina/io;
 public function main() returns error? {
     http:Client c = check new ("https://example.com");
 
-    var r1 = check c->put("/put", "body");
+    http:Response r1 = check c->put("/put", "body");
     io:println(r1.statusCode);          // @output 200
 
-    var r2 = check c->patch("/patch", {"key": "val"});
+    http:Response r2 = check c->patch("/patch", {"key": "val"});
     io:println(r2.statusCode);          // @output 200
 
-    var r3 = check c->delete("/delete");
+    http:Response r3 = check c->delete("/delete");
     io:println(r3.statusCode);          // @output 200
 
-    var r4 = check c->head("/head");
+    http:Response r4 = check c->head("/head");
     io:println(r4.statusCode);          // @output 200
 
-    var r5 = check c->options("/options");
+    http:Response r5 = check c->options("/options");
     io:println(r5.statusCode);          // @output 200
 
-    var r6 = check c->execute("PATCH", "/execute", "exec body");
+    http:Response r6 = check c->execute("PATCH", "/execute", "exec body");
     io:println(r6.statusCode);          // @output 200
 
     return;

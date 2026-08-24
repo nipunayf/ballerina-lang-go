@@ -21,15 +21,15 @@ public function main() returns error? {
     http:Client c = check new ("https://example.com");
 
     // POST with string body — headers and mediaType default to ()
-    var r = check c->post("/post", "hello world");
+    http:Response r = check c->post("/post", "hello world");
     io:println(r.statusCode);           // @output 200
 
     // POST with explicit Content-Type
-    var r2 = check c->post("/post", "{\"key\":\"value\"}", (), "application/json");
+    http:Response r2 = check c->post("/post", "{\"key\":\"value\"}", (), "application/json");
     io:println(r2.statusCode);          // @output 200
 
     // POST with map body — automatically serialized to JSON
-    var r3 = check c->post("/post", {"name": "test", "count": 1});
+    http:Response r3 = check c->post("/post", {"name": "test", "count": 1});
     io:println(r3.statusCode);          // @output 200
     return;
 }

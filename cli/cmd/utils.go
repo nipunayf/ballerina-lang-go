@@ -21,36 +21,44 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 
-	"ballerina-lang-go/projects"
-	"ballerina-lang-go/tools/diagnostics"
+	"github.com/ballerina-nutcracker/ballerina/projects"
+	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
 
-// printError prints an error message in the standard Ballerina CLI format to stderr.
-func printError(err error, usage string, showHelp bool) {
-	printErrorTo(os.Stderr, err, usage, showHelp)
+// findWorkspaceRoot searches for a workspace root starting from the given
+// path. Returns the workspace root path if found, or empty string if not
+// inside a workspace. Shared by new, run, build, and pack so that all four
+// resolve "am I inside a workspace member?" the same way.
+func findWorkspaceRoot(startPath string) string {
+	current := startPath
+	for {
+		tomlPath := filepath.Join(current, projects.BallerinaTomlFile)
+		if _, err := os.Stat(tomlPath); err == nil {
+			if isWorkspaceToml(tomlPath) {
+				return current
+			}
+		}
+
+		parent := filepath.Dir(current)
+		if parent == current {
+			// Reached root
+			return ""
+		}
+		current = parent
+	}
 }
 
-func printRuntimeError(err error) {
-	_, _ = fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-}
-
-// printErrorTo prints an error message in the standard Ballerina CLI format to the given writer.
-func printErrorTo(w io.Writer, err error, usage string, showHelp bool) {
-	_, _ = fmt.Fprintf(w, "ballerina: %s\n", err.Error())
-	if usage != "" {
-		_, _ = fmt.Fprintln(w)
-		_, _ = fmt.Fprintln(w, "USAGE:")
-		_, _ = fmt.Fprintf(w, "    %s\n", usage)
-	}
-	if showHelp {
-		_, _ = fmt.Fprintln(w)
-		_, _ = fmt.Fprintln(w, "For more information try --help")
-	}
+// usageError wraps an error with a USAGE block; cobra prefixes the result
+// with "ballerina:" when printing.
+func usageError(usage, format string, args ...any) error {
+	inner := fmt.Errorf(format, args...)
+	return fmt.Errorf("%w\n\nUSAGE:\n    %s", inner, usage)
 }
 
 // validateSourceFile validates the source file argument for the 'run' command.

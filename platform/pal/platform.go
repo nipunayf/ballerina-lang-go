@@ -14,7 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-// Package pal provides the Platform Adaptation Layer (PAL).
+// Package pal provides the Platform Abstraction Layer (PAL).
 //
 // PAL abstracts away interactions with the underlying platform such that the
 // runtime can be agnostic toward the underlying platform. All library functions
@@ -68,6 +68,11 @@ type (
 		Stat       func(path string) (fs.FileInfo, error)
 		ReadDir    func(path string) ([]fs.DirEntry, error)
 		MkdirAll   func(path string, perm fs.FileMode) error
+		// OpenReadable opens path for streaming reads. Close releases the handle.
+		OpenReadable func(path string) (io.ReadCloser, error)
+		// OpenWritable opens path for streaming writes, truncating unless appendMode
+		// is set. Close flushes and releases the handle.
+		OpenWritable func(path string, appendMode bool) (io.WriteCloser, error)
 	}
 	OS struct {
 		GetEnv      func(name string) string

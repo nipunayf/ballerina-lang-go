@@ -19,10 +19,10 @@ package query
 import (
 	"strings"
 
-	"ballerina-lang-go/ls/core/uri"
-	"ballerina-lang-go/ls/core/workspace"
-	"ballerina-lang-go/ls/protocol"
-	"ballerina-lang-go/parser/tree"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/uri"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/workspace"
+	"github.com/ballerina-nutcracker/ballerina/ls/protocol"
+	tree "github.com/ballerina-nutcracker/ballerina/st"
 )
 
 type ByteRange struct {

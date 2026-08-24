@@ -7,20 +7,12 @@
       (value-type null)))
     (block-function-body
       (var-def
-        (variable $desugar$0 (expr
-          (new
-            (user-defined-type time TimeZone) (
-            (literal Asia/Colombo))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$0))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$0))) ())
-      (var-def
         (variable tz (type
           (user-defined-type time TimeZone)) (expr
-          (simple-var-ref $desugar$0))))
+          (checked-expr
+            (new
+              (user-defined-type time TimeZone) (
+              (literal Asia/Colombo)))))))
       (var-def
         (variable offset (type
           (union-type
@@ -34,19 +26,11 @@
             (simple-var-ref offset)
             (value-type null)))))
       (var-def
-        (variable $desugar$1 (expr
-          (invocation time utcFromString (
-            (literal 2007-12-03T10:15:30.00Z))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$1))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$1))) ())
-      (var-def
         (variable utc (type
           (user-defined-type time Utc)) (expr
-          (simple-var-ref $desugar$1))))
+          (checked-expr
+            (invocation time utcFromString (
+              (literal 2007-12-03T10:15:30.00Z)))))))
       (var-def
         (variable civil (type
           (user-defined-type time Civil)) (expr
@@ -84,43 +68,27 @@
             (simple-var-ref civil)
             (literal timeAbbrev)))))
       (var-def
-        (variable $desugar$2 (expr
-          (invocation utcFromCivil expr:
-            (simple-var-ref tz) (
-            (simple-var-ref civil))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$2))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$2))) ())
-      (var-def
         (variable utc2 (type
           (user-defined-type time Utc)) (expr
-          (simple-var-ref $desugar$2))))
+          (checked-expr
+            (invocation utcFromCivil expr:
+              (simple-var-ref tz) (
+              (simple-var-ref civil)))))))
       (expression-stmt
         (invocation io println (
           (invocation time utcToString (
             (simple-var-ref utc2))))))
       (var-def
-        (variable $desugar$3 (expr
-          (invocation civilAddDuration expr:
-            (simple-var-ref tz) (
-            (simple-var-ref civil)
-            (mapping-constructor-expr
-              (key-value
-                (literal months)
-                (literal 1))))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$3))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$3))) ())
-      (var-def
         (variable civil2 (type
           (user-defined-type time Civil)) (expr
-          (simple-var-ref $desugar$3))))
+          (checked-expr
+            (invocation civilAddDuration expr:
+              (simple-var-ref tz) (
+              (simple-var-ref civil)
+              (mapping-constructor-expr
+                (key-value
+                  (literal months)
+                  (literal 1)))))))))
       (expression-stmt
         (invocation io println (
           (index-based-access

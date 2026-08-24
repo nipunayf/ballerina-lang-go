@@ -20,20 +20,12 @@
             (simple-var-ref tz)
             (error-type)))))
       (var-def
-        (variable $desugar$0 (expr
-          (new
-            (user-defined-type time TimeZone) (
-            (literal UTC))))))
-      (if
-        (type-test-expr is
-          (simple-var-ref $desugar$0))
-        (block-stmt
-          (return
-            (simple-var-ref $desugar$0))) ())
-      (var-def
         (variable utcZone (type
           (user-defined-type time TimeZone)) (expr
-          (simple-var-ref $desugar$0))))
+          (checked-expr
+            (new
+              (user-defined-type time TimeZone) (
+              (literal UTC)))))))
       (var-def
         (variable civil (type
           (user-defined-type time Civil)) (expr

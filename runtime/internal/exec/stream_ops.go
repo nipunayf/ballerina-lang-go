@@ -17,9 +17,9 @@
 package exec
 
 import (
-	"ballerina-lang-go/bir"
-	"ballerina-lang-go/runtime/extern"
-	"ballerina-lang-go/values"
+	"github.com/ballerina-nutcracker/ballerina/bir"
+	"github.com/ballerina-nutcracker/ballerina/runtime/extern"
+	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
 func execNewStream(ctx *extern.Context, instr *bir.NewStream, frame *Frame) {
@@ -38,7 +38,7 @@ func resolveStreamMethods(ctx *extern.Context, impl *values.Object) (next, close
 	next = func() values.BalValue {
 		result, err := ctx.InvokeMethod(nextHandle, args)
 		if err != nil {
-			panic(err)
+			panicWithExternError(err)
 		}
 		return result
 	}
@@ -46,7 +46,7 @@ func resolveStreamMethods(ctx *extern.Context, impl *values.Object) (next, close
 		close = func() values.BalValue {
 			result, err := ctx.InvokeMethod(closeHandle, args)
 			if err != nil {
-				panic(err)
+				panicWithExternError(err)
 			}
 			return result
 		}

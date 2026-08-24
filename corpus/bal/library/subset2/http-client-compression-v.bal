@@ -20,22 +20,22 @@ import ballerina/io;
 public function main() returns error? {
     // Default compression (COMPRESSION_AUTO)
     http:Client c1 = check new ("https://example.com", {});
-    var r1 = check c1->get("/path");
+    http:Response r1 = check c1->get("/path");
     io:println(r1.statusCode);  // @output 200
 
     // Explicit COMPRESSION_AUTO
     http:Client c2 = check new ("https://example.com", {compression: http:COMPRESSION_AUTO});
-    var r2 = check c2->get("/path");
+    http:Response r2 = check c2->get("/path");
     io:println(r2.statusCode);  // @output 200
 
     // COMPRESSION_ALWAYS
     http:Client c3 = check new ("https://example.com", {compression: http:COMPRESSION_ALWAYS});
-    var r3 = check c3->get("/path");
+    http:Response r3 = check c3->get("/path");
     io:println(r3.statusCode);  // @output 200
 
     // COMPRESSION_NEVER — disables Accept-Encoding negotiation
     http:Client c4 = check new ("https://example.com", {compression: http:COMPRESSION_NEVER});
-    var r4 = check c4->get("/path");
+    http:Response r4 = check c4->get("/path");
     io:println(r4.statusCode);  // @output 200
 
     // Compression combined with other config fields
@@ -44,7 +44,7 @@ public function main() returns error? {
         httpVersion: http:HTTP_1_1,
         compression: http:COMPRESSION_NEVER
     });
-    var r5 = check c5->get("/path");
+    http:Response r5 = check c5->get("/path");
     io:println(r5.statusCode);  // @output 200
 
     return;

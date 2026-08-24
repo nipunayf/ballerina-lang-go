@@ -19,31 +19,31 @@ import ballerina/io;
 
 public function main() returns error? {
     http:Client c1 = check new ("https://example.com", {});
-    var r1 = check c1->get("/path");
+    http:Response r1 = check c1->get("/path");
     io:println(r1.statusCode);        // @output 200
 
     http:Client c2 = check new ("https://example.com", {timeout: 30d, followRedirects: {enabled: false}});
-    var r2 = check c2->get("/path");
+    http:Response r2 = check c2->get("/path");
     io:println(r2.statusCode);        // @output 200
-    io:println(r2.getTextPayload());  // @output test body
+    io:println(check r2.getTextPayload());  // @output test body
 
     // Default config — no second arg needed
     http:Client c3 = check new ("https://example.com");
-    var r3 = check c3->get("/path");
+    http:Response r3 = check c3->get("/path");
     io:println(r3.statusCode);        // @output 200
 
     // Pass request headers
     http:Client c4 = check new ("https://example.com");
-    var r4 = check c4->get("/path", {"X-Custom": "value"});
+    http:Response r4 = check c4->get("/path", {"X-Custom": "value"});
     io:println(r4.statusCode);        // @output 200
 
     // httpVersion: "1.1" and "2.0" are valid HttpVersion values
     http:Client c5 = check new ("https://example.com", {httpVersion: "1.1"});
-    var r5 = check c5->get("/path");
+    http:Response r5 = check c5->get("/path");
     io:println(r5.statusCode);        // @output 200
 
     http:Client c6 = check new ("https://example.com", {httpVersion: "2.0"});
-    var r6 = check c6->get("/path");
+    http:Response r6 = check c6->get("/path");
     io:println(r6.statusCode);        // @output 200
     return;
 }

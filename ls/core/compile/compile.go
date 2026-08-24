@@ -36,11 +36,11 @@ import (
 	"sync"
 	"time"
 
-	"ballerina-lang-go/ls/core/event"
-	"ballerina-lang-go/ls/core/uri"
-	"ballerina-lang-go/ls/core/workspace"
-	"ballerina-lang-go/projects"
-	"ballerina-lang-go/tools/diagnostics"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/event"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/uri"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/workspace"
+	"github.com/ballerina-nutcracker/ballerina/projects"
+	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
 )
 
 // CompileRequest carries the document URI to compile.
