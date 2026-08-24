@@ -40,12 +40,22 @@ const (
 	// driver can read publishDiagnostics written out-of-band. It is never sent
 	// by a real client.
 	flushMethod = "$pal/flush"
-	// cancelMethod is the standard LSP $/cancelRequest notification. Under
-	// the design's branch-3 cancellation model it maps to superseding the
-	// relevant source root's current generation (the running compile finishes
-	// but its result is gated out → CE-E3); 09 has no cancellable per-document
-	// request, so it applies to every active root (see CompilationService.Cancel).
+	// cancelMethod is the standard LSP $/cancelRequest notification. It maps
+	// a request id to context cancellation of that in-flight request only — it
+	// does not call CompilationService.Cancel or supersede any source root
+	// (see requestRegistry). Unknown, malformed, completed, and duplicate
+	// cancellation notifications are no-ops.
 	cancelMethod = "$/cancelRequest"
+	// testBlockMethod, testReleaseMethod, and testFlushRequestsMethod are
+	// corpus-only sentinels (like flushMethod) that form the deterministic
+	// test seam for request cancellation: a $pal/blockRequest request holds
+	// until either $pal/releaseRequest (normal completion) or its context is
+	// cancelled by $/cancelRequest; $pal/flushRequests waits for every tracked
+	// request goroutine to finish so the driver can read replies without races.
+	// They are never sent by a real client.
+	testBlockMethod        = "$pal/blockRequest"
+	testReleaseMethod      = "$pal/releaseRequest"
+	testFlushRequestMethod = "$pal/flushRequests"
 )
 
 var (
@@ -53,20 +63,95 @@ var (
 	errExitedWithoutShutdown = errors.New("language server exited without shutdown")
 )
 
+// rpcError codes for request cancellation dispatch. RequestCancelled is the
+// LSP -32800 code; InvalidRequest is the JSON-RPC -32600 code used when a new
+// request reuses an in-flight request id.
+const (
+	rpcRequestCancelled = -32800
+	rpcInvalidRequest   = -32600
+)
+
+// requestEntry is the server-private registry record for one in-flight
+// non-lifecycle request: the request's child context cancel function, a
+// reply guard ensuring exactly one JSON-RPC response is written per request,
+// and (for the corpus-only $pal/blockRequest seam) a one-shot release channel
+// created at registration time so $pal/releaseRequest can find it without
+// racing the blocked goroutine's startup.
+type requestEntry struct {
+	cancel      context.CancelFunc
+	replyOnce   sync.Once
+	release     chan struct{}
+	releaseOnce sync.Once
+}
+
+func (e *requestEntry) closeRelease() {
+	e.releaseOnce.Do(func() { close(e.release) })
+}
+
+// requestRegistry canonically keys valid string and integer JSON-RPC ids to
+// their in-flight request entry. A new request reusing an in-flight id is
+// rejected (register returns false) and cannot replace the original entry;
+// the entry is removed when its goroutine completes.
+type requestRegistry struct {
+	mu      sync.Mutex
+	entries map[string]*requestEntry
+}
+
+func newRequestRegistry() *requestRegistry {
+	return &requestRegistry{entries: make(map[string]*requestEntry)}
+}
+
+func (r *requestRegistry) register(id string) (*requestEntry, context.Context, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.entries[id]; ok {
+		return nil, nil, false
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	entry := &requestEntry{cancel: cancel}
+	r.entries[id] = entry
+	return entry, ctx, true
+}
+
+func (r *requestRegistry) lookup(id string) *requestEntry {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.entries[id]
+}
+
+func (r *requestRegistry) unregister(id string) {
+	r.mu.Lock()
+	delete(r.entries, id)
+	r.mu.Unlock()
+}
+
+// cancelAll cancels every in-flight request's context. Used by shutdown/exit
+// to drain tracked work before completing the lifecycle transition.
+func (r *requestRegistry) cancelAll() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, entry := range r.entries {
+		entry.cancel()
+	}
+}
+
 type Server struct {
-	transport      protocol.Transport
-	projects       *workspace.ProjectService
-	compiler       *compile.CompilationService
-	bus            *event.Bus
-	versionSupport bool
-	initialized    bool
-	shuttingDown   bool
+	transport                      protocol.Transport
+	projects                       *workspace.ProjectService
+	compiler                       *compile.CompilationService
+	bus                            *event.Bus
+	versionSupport                 bool
+	initialized                    bool
+	shuttingDown                   bool
 
 	writeMu sync.Mutex // serializes framed writes (Serve + CE subscriber)
 
 	ceDone        sync.WaitGroup // tracks in-flight CE→publish tasks (flush)
 	lastPubMu     sync.Mutex
 	lastPublished map[string]uint64 // per-root generation dedup for CE publishing
+
+	registry  *requestRegistry // in-flight non-lifecycle requests
+	requestWG sync.WaitGroup   // tracks in-flight request goroutines (drain)
 }
 
 // New creates a Server with the given transport and core services. The bus is
@@ -80,6 +165,7 @@ func New(transport protocol.Transport, projects *workspace.ProjectService, compi
 		compiler:      compiler,
 		bus:           bus,
 		lastPublished: make(map[string]uint64),
+		registry:      newRequestRegistry(),
 	}
 	s.subscribeDiagnostics(bus)
 	s.subscribeEvictions(bus)
@@ -129,9 +215,32 @@ func (s *Server) handleMessage(message protocol.Message) error {
 }
 
 func (s *Server) handleRequest(message protocol.Message) error {
-	result, ok := s.dispatchRequest(message)
-	if !ok {
+	switch message.Method {
+	case "initialize", "shutdown":
+		return s.handleLifecycleRequest(message)
+	}
+	return s.handleTrackedRequest(message)
+}
+
+// handleLifecycleRequest runs initialize/shutdown synchronously in the Serve
+// loop — they are control-plane transitions, not tracked cancellable work.
+func (s *Server) handleLifecycleRequest(message protocol.Message) error {
+	if s.shuttingDown && message.Method != "shutdown" {
 		return nil
+	}
+	var result any
+	var ok bool
+	switch message.Method {
+	case "initialize":
+		result, ok = s.handleInitialize(message.Params)
+		if !ok {
+			return nil
+		}
+	case "shutdown":
+		result, ok = s.handleShutdown()
+		if !ok {
+			return nil
+		}
 	}
 	return s.write(protocol.Response{
 		JSONRPC: "2.0",
@@ -140,17 +249,80 @@ func (s *Server) handleRequest(message protocol.Message) error {
 	})
 }
 
-func (s *Server) dispatchRequest(message protocol.Message) (any, bool) {
-	if s.shuttingDown && message.Method != "shutdown" {
-		return nil, false
+// handleTrackedRequest runs a non-lifecycle request in a tracked goroutine
+// with a cancellable context. A new request reusing an in-flight id is
+// rejected with Invalid Request (-32600) and does not replace the original
+// registry entry. New work is gated out once the server is shutting down.
+func (s *Server) handleTrackedRequest(message protocol.Message) error {
+	if s.shuttingDown {
+		return nil
 	}
+	idKey, valid := requestIDKey(message.ID)
+	if !valid {
+		return nil
+	}
+	entry, ctx, ok := s.registry.register(idKey)
+	if !ok {
+		return s.write(protocol.ErrorResponse{
+			JSONRPC: "2.0",
+			ID:      message.ID,
+			Error:   protocol.RPCError{Code: rpcInvalidRequest, Message: "request id already in flight"},
+		})
+	}
+	if message.Method == testBlockMethod {
+		entry.release = make(chan struct{})
+	}
+	s.requestWG.Add(1)
+	go func() {
+		defer s.requestWG.Done()
+		defer s.registry.unregister(idKey)
+		res := s.dispatchTracked(ctx, message)
+		if !res.handled {
+			return
+		}
+		entry.replyOnce.Do(func() {
+			if res.err != nil {
+				s.write(protocol.ErrorResponse{
+					JSONRPC: "2.0",
+					ID:      message.ID,
+					Error:   *res.err,
+				})
+				return
+			}
+			if ctx.Err() != nil {
+				s.write(protocol.ErrorResponse{
+					JSONRPC: "2.0",
+					ID:      message.ID,
+					Error:   protocol.RPCError{Code: rpcRequestCancelled, Message: "request cancelled"},
+				})
+				return
+			}
+			s.write(protocol.Response{
+				JSONRPC: "2.0",
+				ID:      message.ID,
+				Result:  res.result,
+			})
+		})
+	}()
+	return nil
+}
+
+// trackedResult is the outcome of a non-lifecycle request handler. A concrete
+// handler error (non-nil err) wins over cancellation only if the handler
+// returned it; a handler that observes its context being cancelled returns
+// errRequestCancelled so the reply is the -32800 error.
+type trackedResult struct {
+	result  any
+	err     *protocol.RPCError
+	handled bool
+}
+
+func (s *Server) dispatchTracked(ctx context.Context, message protocol.Message) trackedResult {
 	switch message.Method {
-	case "initialize":
-		return s.handleInitialize(message.Params)
-	case "shutdown":
-		return s.handleShutdown()
+	case testBlockMethod:
+		return s.handleTestBlockRequest(ctx, message)
 	}
-	return nil, false
+	return trackedResult{}
 }
 
 func (s *Server) handleShutdown() (any, bool) {
@@ -158,6 +330,7 @@ func (s *Server) handleShutdown() (any, bool) {
 		return nil, true
 	}
 	s.shuttingDown = true
+	s.cancelAndDrainTrackedRequests()
 	if s.projects != nil {
 		_ = s.projects.Shutdown(context.Background())
 	}
@@ -165,6 +338,15 @@ func (s *Server) handleShutdown() (any, bool) {
 		s.compiler.Shutdown()
 	}
 	return nil, true
+}
+
+// cancelAndDrainTrackedRequests cancels every in-flight non-lifecycle request
+// and waits for their goroutines to finish (each writes its detached
+// RequestCancelled reply under writeMu) before returning. Used by shutdown
+// (before the workspace/compiler drain) and exit (before ending the loop).
+func (s *Server) cancelAndDrainTrackedRequests() {
+	s.registry.cancelAll()
+	s.requestWG.Wait()
 }
 
 func (s *Server) handleInitialize(params json.RawMessage) (any, bool) {
@@ -192,6 +374,7 @@ func (s *Server) handleInitialize(params json.RawMessage) (any, bool) {
 
 func (s *Server) handleNotification(message protocol.Message) error {
 	if message.Method == "exit" {
+		s.cancelAndDrainTrackedRequests()
 		if !s.shuttingDown {
 			return errExitedWithoutShutdown
 		}
@@ -205,6 +388,11 @@ func (s *Server) handleNotification(message protocol.Message) error {
 		return nil
 	case flushMethod:
 		return s.handleFlush()
+	case testFlushRequestMethod:
+		s.requestWG.Wait()
+		return nil
+	case testReleaseMethod:
+		return s.handleTestReleaseRequest(message.Params)
 	case cancelMethod:
 		return s.handleCancelRequest(message.Params)
 	case "textDocument/didOpen":
@@ -228,18 +416,83 @@ func (s *Server) handleFlush() error {
 	return nil
 }
 
-// handleCancelRequest routes the standard LSP $/cancelRequest notification to
-// the compile engine's Cancel, which supersedes the current generation of
-// every active source root so in-flight compiles finish but their results are
-// gated out (CE-E3). The CancelParams id is intentionally ignored (and not
-// parsed): 09 has no cancellable per-document request to map an id to a source
-// root, so the cancel applies to all active roots (per-root targeting is
-// deferred to 10/11). Because the params are never decoded, a malformed
-// payload cannot break the dispatch loop.
+// handleCancelRequest parses the $/cancelRequest notification's id and
+// cancels only that in-flight request's context. It does not call
+// CompilationService.Cancel, supersede a source root, or write a response —
+// the cancelled request's goroutine writes the detached RequestCancelled reply
+// itself. Unknown, malformed, completed, and duplicate cancellation
+// notifications are no-ops: a malformed payload or non-string/non-integer id
+// fails to decode and is ignored; an id with no registry entry is a lookup
+// miss; an already-completed request's entry has been unregistered; a repeat
+// cancel simply re-invokes an already-cancelled context's cancel (idempotent).
 func (s *Server) handleCancelRequest(params json.RawMessage) error {
-	_ = params
-	if s.compiler != nil {
-		s.compiler.Cancel()
+	var cancelParams protocol.CancelParams
+	if err := json.Unmarshal(params, &cancelParams); err != nil {
+		return nil
+	}
+	idKey, ok := cancelIDKey(cancelParams.ID)
+	if !ok {
+		return nil
+	}
+	if entry := s.registry.lookup(idKey); entry != nil {
+		entry.cancel()
+	}
+	return nil
+}
+
+// cancelIDKey renders a CancelParams id as the canonical registry key, so a
+// string id "1" (key `"1"`) and an integer id 1 (key `1`) remain distinct at
+// cancellation and registration.
+func cancelIDKey(id protocol.OrCancelParamsId) (string, bool) {
+	payload, err := json.Marshal(id)
+	if err != nil {
+		return "", false
+	}
+	return string(payload), true
+}
+
+func requestIDKey(raw json.RawMessage) (string, bool) {
+	var id protocol.OrCancelParamsId
+	if err := json.Unmarshal(raw, &id); err != nil {
+		return "", false
+	}
+	return cancelIDKey(id)
+}
+
+// handleTestBlockRequest is the corpus-only $pal/blockRequest handler: it
+// holds the request until $pal/releaseRequest closes its release channel
+// (normal completion → {"released": true}) or its context is cancelled by
+// $/cancelRequest (→ RequestCancelled -32800). The release channel is created
+// on the registry entry at registration time (in the Serve goroutine), so a
+// subsequent $pal/releaseRequest finds it without racing this goroutine's
+// startup. It never touches the compiler.
+func (s *Server) handleTestBlockRequest(ctx context.Context, message protocol.Message) trackedResult {
+	idKey, _ := requestIDKey(message.ID)
+	entry := s.registry.lookup(idKey)
+	select {
+	case <-entry.release:
+		return trackedResult{result: map[string]any{"released": true}, handled: true}
+	case <-ctx.Done():
+		return trackedResult{err: &protocol.RPCError{Code: rpcRequestCancelled, Message: "request cancelled"}, handled: true}
+	}
+}
+
+// handleTestReleaseRequest closes the release channel of the in-flight
+// $pal/blockRequest with the matching id, letting it complete normally. An
+// unknown, completed, or malformed id is a no-op.
+func (s *Server) handleTestReleaseRequest(params json.RawMessage) error {
+	var p struct {
+		ID json.RawMessage `json:"id"`
+	}
+	if err := json.Unmarshal(params, &p); err != nil || len(p.ID) == 0 {
+		return nil
+	}
+	idKey, ok := requestIDKey(p.ID)
+	if !ok {
+		return nil
+	}
+	if entry := s.registry.lookup(idKey); entry != nil && entry.release != nil {
+		entry.closeRelease()
 	}
 	return nil
 }

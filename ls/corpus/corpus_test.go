@@ -131,9 +131,9 @@ func TestModifierChainIdenticalOutputCorpus(t *testing.T) {
 	runTranscript(t, platform, "sync/testdata/modifier-chain-identical-output.json")
 }
 
-func runTranscript(t *testing.T, platform pal.Platform, path string) {
+func runTranscript(t *testing.T, platform pal.Platform, fixturePath string) {
 	t.Helper()
-	content, err := platform.FS.ReadFile(path)
+	content, err := platform.FS.ReadFile(fixturePath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +148,7 @@ func runTranscript(t *testing.T, platform pal.Platform, path string) {
 	}
 	source := ""
 	if fixture.Source != "" {
-		bytes, err := platform.FS.ReadFile("sync/testdata/" + fixture.Source)
+		bytes, err := platform.FS.ReadFile(path.Join(path.Dir(fixturePath), fixture.Source))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -198,7 +198,7 @@ func runTranscript(t *testing.T, platform pal.Platform, path string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := platform.FS.WriteFile(path, append(updated, '\n')); err != nil {
+		if err := platform.FS.WriteFile(fixturePath, append(updated, '\n')); err != nil {
 			t.Fatal(err)
 		}
 		return

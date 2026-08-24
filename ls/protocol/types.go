@@ -25,6 +25,20 @@ type Message struct {
 	Method  string          `json:"method,omitempty"`
 	Params  json.RawMessage `json:"params,omitempty"`
 	Result  json.RawMessage `json:"result,omitempty"`
+	Error   *RPCError       `json:"error,omitempty"`
+}
+
+// RPCError is the JSON-RPC error object carried by an error response.
+type RPCError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+// ErrorResponse is a JSON-RPC error response payload.
+type ErrorResponse struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id"`
+	Error   RPCError        `json:"error"`
 }
 
 // Response is a JSON-RPC response payload.
