@@ -131,6 +131,18 @@ func TestModifierChainIdenticalOutputCorpus(t *testing.T) {
 	runTranscript(t, platform, "sync/testdata/modifier-chain-identical-output.json")
 }
 
+func TestDocumentSymbolCorpus(t *testing.T) {
+	platform, cleanup := palnative.NewPlatform()
+	defer cleanup()
+	runTranscript(t, platform, "documentSymbol/testdata/document-symbols.json")
+}
+
+func TestFlatDocumentSymbolCorpus(t *testing.T) {
+	platform, cleanup := palnative.NewPlatform()
+	defer cleanup()
+	runTranscript(t, platform, "documentSymbol/testdata/document-symbols-flat.json")
+}
+
 func runTranscript(t *testing.T, platform pal.Platform, fixturePath string) {
 	t.Helper()
 	content, err := platform.FS.ReadFile(fixturePath)

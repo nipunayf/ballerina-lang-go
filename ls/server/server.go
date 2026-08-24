@@ -28,6 +28,7 @@ import (
 
 	"ballerina-lang-go/ls/core/compile"
 	"ballerina-lang-go/ls/core/event"
+	"ballerina-lang-go/ls/core/query"
 	"ballerina-lang-go/ls/core/uri"
 	"ballerina-lang-go/ls/core/workspace"
 	"ballerina-lang-go/ls/protocol"
@@ -140,7 +141,10 @@ type Server struct {
 	projects                       *workspace.ProjectService
 	compiler                       *compile.CompilationService
 	bus                            *event.Bus
+	query                          *query.Service
 	versionSupport                 bool
+	documentSymbolHierarchySupport bool
+	documentSymbolTagSupport       bool
 	initialized                    bool
 	shuttingDown                   bool
 
@@ -164,6 +168,7 @@ func New(transport protocol.Transport, projects *workspace.ProjectService, compi
 		projects:      projects,
 		compiler:      compiler,
 		bus:           bus,
+		query:         query.New(projects),
 		lastPublished: make(map[string]uint64),
 		registry:      newRequestRegistry(),
 	}
@@ -319,6 +324,8 @@ type trackedResult struct {
 
 func (s *Server) dispatchTracked(ctx context.Context, message protocol.Message) trackedResult {
 	switch message.Method {
+	case "textDocument/documentSymbol":
+		return s.handleDocumentSymbol(ctx, message.Params)
 	case testBlockMethod:
 		return s.handleTestBlockRequest(ctx, message)
 	}
@@ -361,6 +368,19 @@ func (s *Server) handleInitialize(params json.RawMessage) (any, bool) {
 				s.versionSupport = versionSupport
 			}
 		}
+		if symbolCaps, ok := caps.DocumentSymbol.Value(); ok {
+			if hierarchy, ok := symbolCaps.HierarchicalDocumentSymbolSupport.Value(); ok {
+				s.documentSymbolHierarchySupport = hierarchy
+			}
+			if tagSupport, ok := symbolCaps.TagSupport.Value(); ok {
+				for _, tag := range tagSupport.ValueSet {
+					if tag == protocol.SymbolTagDeprecated {
+						s.documentSymbolTagSupport = true
+						break
+					}
+				}
+			}
+		}
 	}
 	opts := protocol.TextDocumentSyncOptions{
 		OpenClose: protocol.NewOptional(true),
@@ -368,7 +388,8 @@ func (s *Server) handleInitialize(params json.RawMessage) (any, bool) {
 		Save:      protocol.NewOptional(protocol.NewOrTextDocumentSyncOptionsSaveBoolean(true)),
 	}
 	return protocol.InitializeResult{Capabilities: protocol.ServerCapabilities{
-		TextDocumentSync: protocol.NewOptional(protocol.NewOrServerCapabilitiesTextDocumentSyncTextDocumentSyncOptions(opts)),
+		TextDocumentSync:       protocol.NewOptional(protocol.NewOrServerCapabilitiesTextDocumentSyncTextDocumentSyncOptions(opts)),
+		DocumentSymbolProvider: protocol.NewOptional(protocol.NewOrServerCapabilitiesDocumentSymbolProviderBoolean(true)),
 	}}, true
 }
 
