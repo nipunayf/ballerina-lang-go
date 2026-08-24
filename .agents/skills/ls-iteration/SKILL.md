@@ -39,7 +39,7 @@ Shared config: research/record paths in `sources.md` next to this file. Conventi
 
    **Escalation rule:** if a local-tier target turns out to need a new shared abstraction partway through, stop and escalate to the full interview before implementing it. Never retroactively justify a facade that was never reviewed as one.
 
-3. **Research** — fan out the explore subagents; **never read a research source tree inline**. The agents carry per-source instructions and persistent learnings indexes that inline reading silently skips. Definitions live in `.pi/agents/`; if a selected agent type isn't available in the current harness, stop and say so — do not fall back to exploring that source inline.
+3. **Research** — fan out the explore subagents; **never read a research source tree inline**. The agents carry per-source instructions and a persistent vault of notes/MOCs in `docs/` (see `explore-agent-protocol`) that inline reading silently skips. Definitions live in `.pi/agents/`; if a selected agent type isn't available in the current harness, stop and say so — do not fall back to exploring that source inline.
 
    Select agents by the ticket's target shape ("always" is the floor, not a cap — when in doubt, include; a "nothing relevant" return is cheap):
 
