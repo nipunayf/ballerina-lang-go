@@ -54,6 +54,7 @@ func main() {
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(pushCmd)
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(startLangServerCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
