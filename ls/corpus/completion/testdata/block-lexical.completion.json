@@ -1,5 +1,5 @@
 {
-  "source": "incremental_edit.bal",
+  "source": "block-lexical.bal",
   "sources": null,
   "messages": [
     {
@@ -18,7 +18,7 @@
       "method": "textDocument/didOpen",
       "params": {
         "textDocument": {
-          "uri": "file:///workspace/incremental_edit.bal",
+          "uri": "file:///workspace/block-lexical.bal",
           "languageId": "ballerina",
           "version": 1,
           "text": "${source}"
@@ -32,51 +32,22 @@
     },
     {
       "jsonrpc": "2.0",
-      "method": "textDocument/didChange",
+      "id": 2,
+      "method": "textDocument/completion",
       "params": {
         "textDocument": {
-          "uri": "file:///workspace/incremental_edit.bal",
-          "version": 2
+          "uri": "file:///workspace/block-lexical.bal"
         },
-        "contentChanges": [
-          {
-            "range": {
-              "start": {
-                "line": 0,
-                "character": 0
-              },
-              "end": {
-                "line": 0,
-                "character": 0
-              }
-            },
-            "text": "// synchronized\n"
-          }
-        ]
+        "position": {
+          "line": 4,
+          "character": 0
+        }
       }
     },
     {
       "jsonrpc": "2.0",
-      "method": "$pal/flush",
+      "method": "$pal/flushRequests",
       "params": {}
-    },
-    {
-      "jsonrpc": "2.0",
-      "method": "textDocument/didSave",
-      "params": {
-        "textDocument": {
-          "uri": "file:///workspace/incremental_edit.bal"
-        }
-      }
-    },
-    {
-      "jsonrpc": "2.0",
-      "method": "textDocument/didClose",
-      "params": {
-        "textDocument": {
-          "uri": "file:///workspace/incremental_edit.bal"
-        }
-      }
     }
   ],
   "expected": [
@@ -98,8 +69,24 @@
       "jsonrpc": "2.0",
       "method": "textDocument/publishDiagnostics",
       "params": {
-        "uri": "file:///workspace/incremental_edit.bal",
+        "uri": "file:///workspace/block-lexical.bal",
         "diagnostics": [
+          {
+            "range": {
+              "start": {
+                "line": 3,
+                "character": 4
+              },
+              "end": {
+                "line": 3,
+                "character": 19
+              }
+            },
+            "severity": 1,
+            "code": "SEMANTIC_ERROR",
+            "source": "ballerina",
+            "message": "unused variable 'number'"
+          },
           {
             "range": {
               "start": {
@@ -114,43 +101,61 @@
             "severity": 1,
             "code": "SEMANTIC_ERROR",
             "source": "ballerina",
-            "message": "unused variable 'emoji'"
+            "message": "unused variable 'total'"
           }
         ]
       }
     },
     {
       "jsonrpc": "2.0",
-      "method": "textDocument/publishDiagnostics",
-      "params": {
-        "uri": "file:///workspace/incremental_edit.bal",
-        "diagnostics": [
-          {
-            "range": {
-              "start": {
-                "line": 1,
-                "character": 0
-              },
-              "end": {
-                "line": 1,
-                "character": 20
-              }
-            },
-            "severity": 1,
-            "code": "SEMANTIC_ERROR",
-            "source": "ballerina",
-            "message": "unused variable 'emoji'"
-          }
-        ]
-      }
-    },
-    {
-      "jsonrpc": "2.0",
-      "method": "textDocument/publishDiagnostics",
-      "params": {
-        "uri": "file:///workspace/incremental_edit.bal",
-        "diagnostics": []
-      }
+      "id": 2,
+      "result": [
+        {
+          "label": "check",
+          "kind": 14,
+          "insertText": "check"
+        },
+        {
+          "label": "helper",
+          "kind": 3,
+          "insertText": "helper"
+        },
+        {
+          "label": "if",
+          "kind": 14,
+          "insertText": "if"
+        },
+        {
+          "label": "main",
+          "kind": 3,
+          "insertText": "main"
+        },
+        {
+          "label": "number",
+          "kind": 6,
+          "insertText": "number"
+        },
+        {
+          "label": "panic",
+          "kind": 14,
+          "insertText": "panic"
+        },
+        {
+          "label": "return",
+          "kind": 14,
+          "insertText": "return"
+        },
+        {
+          "label": "total",
+          "kind": 21,
+          "insertText": "total"
+        },
+        {
+          "label": "while",
+          "kind": 14,
+          "insertText": "while"
+        }
+      ]
     }
   ]
 }

@@ -1,5 +1,5 @@
 {
-  "source": "stale-result-suppression.bal",
+  "source": "current-generation-after-edit.bal",
   "sources": null,
   "messages": [
     {
@@ -18,7 +18,7 @@
       "method": "textDocument/didOpen",
       "params": {
         "textDocument": {
-          "uri": "file:///workspace/stale-result-suppression.bal",
+          "uri": "file:///workspace/current-generation-after-edit.bal",
           "languageId": "ballerina",
           "version": 1,
           "text": "${source}"
@@ -30,14 +30,14 @@
       "method": "textDocument/didChange",
       "params": {
         "textDocument": {
-          "uri": "file:///workspace/stale-result-suppression.bal",
+          "uri": "file:///workspace/current-generation-after-edit.bal",
           "version": 2
         },
         "contentChanges": [
           {
             "range": {
               "start": {
-                "line": 1,
+                "line": 0,
                 "character": 0
               },
               "end": {
@@ -45,7 +45,7 @@
                 "character": 0
               }
             },
-            "text": " int y = 2;\n"
+            "text": "function freshName() {}\n\n"
           }
         ]
       }
@@ -57,12 +57,22 @@
     },
     {
       "jsonrpc": "2.0",
-      "method": "textDocument/didClose",
+      "id": 2,
+      "method": "textDocument/completion",
       "params": {
         "textDocument": {
-          "uri": "file:///workspace/stale-result-suppression.bal"
+          "uri": "file:///workspace/current-generation-after-edit.bal"
+        },
+        "position": {
+          "line": 1,
+          "character": 0
         }
       }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "$pal/flushRequests",
+      "params": {}
     }
   ],
   "expected": [
@@ -84,34 +94,41 @@
       "jsonrpc": "2.0",
       "method": "textDocument/publishDiagnostics",
       "params": {
-        "uri": "file:///workspace/stale-result-suppression.bal",
-        "diagnostics": [
-          {
-            "range": {
-              "start": {
-                "line": 1,
-                "character": 1
-              },
-              "end": {
-                "line": 1,
-                "character": 11
-              }
-            },
-            "severity": 1,
-            "code": "SEMANTIC_ERROR",
-            "source": "ballerina",
-            "message": "unused variable 'y'"
-          }
-        ]
+        "uri": "file:///workspace/current-generation-after-edit.bal",
+        "diagnostics": []
       }
     },
     {
       "jsonrpc": "2.0",
-      "method": "textDocument/publishDiagnostics",
-      "params": {
-        "uri": "file:///workspace/stale-result-suppression.bal",
-        "diagnostics": []
-      }
+      "id": 2,
+      "result": [
+        {
+          "label": "const",
+          "kind": 14,
+          "insertText": "const"
+        },
+        {
+          "label": "freshName",
+          "kind": 3,
+          "detail": "function() returns nil",
+          "insertText": "freshName"
+        },
+        {
+          "label": "function",
+          "kind": 14,
+          "insertText": "function"
+        },
+        {
+          "label": "import",
+          "kind": 14,
+          "insertText": "import"
+        },
+        {
+          "label": "type",
+          "kind": 14,
+          "insertText": "type"
+        }
+      ]
     }
   ]
 }

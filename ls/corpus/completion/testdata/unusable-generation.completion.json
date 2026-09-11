@@ -1,5 +1,5 @@
 {
-  "source": "uri-scheme-rejection.bal",
+  "source": "unusable-generation.bal",
   "sources": null,
   "messages": [
     {
@@ -18,50 +18,30 @@
       "method": "textDocument/didOpen",
       "params": {
         "textDocument": {
-          "uri": "expr:///workspace/expr1.bal",
+          "uri": "file:///workspace/unusable-generation.bal",
           "languageId": "ballerina",
           "version": 1,
-          "text": "public function main() {\n    int x = 1;\n}\n"
+          "text": "${source}"
         }
       }
     },
     {
       "jsonrpc": "2.0",
-      "method": "$pal/flush",
-      "params": {}
-    },
-    {
-      "jsonrpc": "2.0",
-      "method": "textDocument/didOpen",
+      "id": 2,
+      "method": "textDocument/completion",
       "params": {
         "textDocument": {
-          "uri": "ai:///workspace/ai1.bal",
-          "languageId": "ballerina",
-          "version": 1,
-          "text": "public function main() {\n    int x = 1;\n}\n"
+          "uri": "file:///workspace/unusable-generation.bal"
+        },
+        "position": {
+          "line": 0,
+          "character": 0
         }
       }
     },
     {
       "jsonrpc": "2.0",
-      "method": "$pal/flush",
-      "params": {}
-    },
-    {
-      "jsonrpc": "2.0",
-      "method": "textDocument/didOpen",
-      "params": {
-        "textDocument": {
-          "uri": "untitled:Untitled-1",
-          "languageId": "ballerina",
-          "version": 1,
-          "text": "public function main() {\n    int x = 1;\n}\n"
-        }
-      }
-    },
-    {
-      "jsonrpc": "2.0",
-      "method": "$pal/flush",
+      "method": "$pal/flushRequests",
       "params": {}
     }
   ],
@@ -79,6 +59,11 @@
           "completionProvider": {}
         }
       }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "result": []
     }
   ]
 }
