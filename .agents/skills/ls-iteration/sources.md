@@ -42,10 +42,10 @@ is the compilation check.
 
 | Target | Path |
 |---|---|
-| Map | `/Users/wso2/projects/ballerina/ballerina-go/docs/raw/ls-backlog/map.md` |
-| Tickets | `/Users/wso2/projects/ballerina/ballerina-go/docs/raw/ls-backlog/issues/NN-<slug>.md` |
-| Research (per ticket) | `/Users/wso2/projects/ballerina/ballerina-go/docs/raw/ls-backlog/research/NN-<slug>.md` |
-| Draft design (per ticket) | `/Users/wso2/projects/ballerina/ballerina-go/docs/raw/ls-backlog/design/NN-<slug>.md` |
+| Map | `/Users/wso2/projects/ballerina/ballerina-go/docs/moc/ls-backlog.md` |
+| Tickets | `/Users/wso2/projects/ballerina/ballerina-go/docs/issues/NN-<slug>.md` |
+| Research (per ticket) | `/Users/wso2/projects/ballerina/ballerina-go/docs/research/NN-<slug>.md` |
+| Draft design (per ticket) | `/Users/wso2/projects/ballerina/ballerina-go/docs/design/NN-<slug>.md` |
 
 Lives in the docs vault, a separate repo from this worktree — nothing here is committed to `ls`. Curating any of it into the indexed wiki is the docs vault's own concern, not this skill family's.
 
@@ -53,9 +53,9 @@ Lives in the docs vault, a separate repo from this worktree — nothing here is 
 
 | Target | Path |
 |---|---|
-| Decision docs | `/Users/wso2/projects/ballerina/ballerina-go/docs/raw/decisions/` |
-| Roadmap crosswalk (wiki, direct edit) | `/Users/wso2/projects/ballerina/ballerina-go/docs/wiki/concepts/language-server-roadmap.md` |
-| API coverage crosswalk (wiki, direct edit) | `/Users/wso2/projects/ballerina/ballerina-go/docs/wiki/concepts/language-server-api-coverage.md` |
+| Decision docs | `/Users/wso2/projects/ballerina/ballerina-go/docs/adr/` |
+| Roadmap crosswalk (direct edit) | `/Users/wso2/projects/ballerina/ballerina-go/docs/moc/ls-design/language-server-roadmap.md` |
+| API coverage crosswalk (direct edit) | `/Users/wso2/projects/ballerina/ballerina-go/docs/moc/ls-design/language-server-api-coverage.md` |
 | Architecture docs (reference-only) | `/Users/wso2/projects/ballerina/bls-docs/feat3` |
 
 ## Related references
