@@ -27,6 +27,7 @@ import (
 	"sync"
 
 	"github.com/ballerina-nutcracker/ballerina/ls/core/compile"
+	"github.com/ballerina-nutcracker/ballerina/ls/core/completion"
 	"github.com/ballerina-nutcracker/ballerina/ls/core/event"
 	"github.com/ballerina-nutcracker/ballerina/ls/core/observability"
 	"github.com/ballerina-nutcracker/ballerina/ls/core/uri"
@@ -71,10 +72,12 @@ var (
 
 // rpcError codes for request cancellation dispatch. RequestCancelled is the
 // LSP -32800 code; InvalidRequest is the JSON-RPC -32600 code used when a new
-// request reuses an in-flight request id.
+// request reuses an in-flight request id; InternalError is the JSON-RPC
+// -32603 code used for a completion handler failure that is not cancellation.
 const (
 	rpcRequestCancelled = -32800
 	rpcInvalidRequest   = -32600
+	rpcInternalError    = -32603
 )
 
 // requestEntry is the server-private registry record for one in-flight
@@ -147,13 +150,14 @@ func (r *requestRegistry) cancelAll() {
 }
 
 type Server struct {
-	transport                      protocol.Transport
-	projects                       *workspace.ProjectService
-	compiler                       *compile.CompilationService
-	bus                            *event.Bus
-	versionSupport                 bool
-	initialized                    bool
-	shuttingDown                   bool
+	transport      protocol.Transport
+	projects       *workspace.ProjectService
+	compiler       *compile.CompilationService
+	completion     *completion.Service
+	bus            *event.Bus
+	versionSupport bool
+	initialized    bool
+	shuttingDown   bool
 
 	writeMu sync.Mutex // serializes framed writes (Serve + CE subscriber)
 
@@ -191,6 +195,7 @@ func New(transport protocol.Transport, projects *workspace.ProjectService, compi
 		transport:     transport,
 		projects:      projects,
 		compiler:      compiler,
+		completion:    completion.New(compiler),
 		bus:           bus,
 		lastPublished: make(map[string]uint64),
 		registry:      newRequestRegistry(),
@@ -385,6 +390,8 @@ func (s *Server) dispatchTracked(ctx context.Context, message protocol.Message) 
 	switch message.Method {
 	case testBlockMethod:
 		return s.handleTestBlockRequest(ctx, message)
+	case "textDocument/completion":
+		return s.handleCompletion(ctx, message)
 	}
 	return trackedResult{}
 }
@@ -432,7 +439,8 @@ func (s *Server) handleInitialize(_ context.Context, params json.RawMessage) (an
 		Save:      protocol.NewOptional(protocol.NewOrTextDocumentSyncOptionsSaveBoolean(true)),
 	}
 	return protocol.InitializeResult{Capabilities: protocol.ServerCapabilities{
-		TextDocumentSync: protocol.NewOptional(protocol.NewOrServerCapabilitiesTextDocumentSyncTextDocumentSyncOptions(opts)),
+		TextDocumentSync:   protocol.NewOptional(protocol.NewOrServerCapabilitiesTextDocumentSyncTextDocumentSyncOptions(opts)),
+		CompletionProvider: protocol.NewOptional(protocol.CompletionOptions{}),
 	}}, true
 }
 
