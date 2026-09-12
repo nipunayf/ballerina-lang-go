@@ -1,5 +1,5 @@
 {
-  "source": "module-lexical.bal",
+  "source": "malformed-top-level-sibling.bal",
   "sources": null,
   "messages": [
     {
@@ -18,7 +18,7 @@
       "method": "textDocument/didOpen",
       "params": {
         "textDocument": {
-          "uri": "file:///workspace/module-lexical.bal",
+          "uri": "file:///workspace/malformed-top-level-sibling.bal",
           "languageId": "ballerina",
           "version": 1,
           "text": "${source}"
@@ -36,7 +36,7 @@
       "method": "textDocument/completion",
       "params": {
         "textDocument": {
-          "uri": "file:///workspace/module-lexical.bal"
+          "uri": "file:///workspace/malformed-top-level-sibling.bal"
         },
         "position": {
           "line": 4,
@@ -69,23 +69,23 @@
       "jsonrpc": "2.0",
       "method": "textDocument/publishDiagnostics",
       "params": {
-        "uri": "file:///workspace/module-lexical.bal",
+        "uri": "file:///workspace/malformed-top-level-sibling.bal",
         "diagnostics": [
           {
             "range": {
               "start": {
-                "line": 1,
-                "character": 0
+                "line": 2,
+                "character": 13
               },
               "end": {
-                "line": 1,
-                "character": 20
+                "line": 2,
+                "character": 13
               }
             },
             "severity": 1,
-            "code": "SEMANTIC_ERROR",
+            "code": "SYNTAX_ERROR",
             "source": "ballerina",
-            "message": "unused variable 'COUNT'"
+            "message": "missing identifier"
           }
         ]
       }
@@ -94,16 +94,6 @@
       "jsonrpc": "2.0",
       "id": 2,
       "result": [
-        {
-          "label": "COUNT",
-          "kind": 21,
-          "insertText": "COUNT"
-        },
-        {
-          "label": "Point",
-          "kind": 7,
-          "insertText": "Point"
-        },
         {
           "label": "const",
           "kind": 14,
@@ -115,14 +105,15 @@
           "insertText": "function"
         },
         {
-          "label": "helper",
-          "kind": 3,
-          "insertText": "helper"
-        },
-        {
           "label": "import",
           "kind": 14,
           "insertText": "import"
+        },
+        {
+          "label": "sibling",
+          "kind": 3,
+          "detail": "function() returns nil",
+          "insertText": "sibling"
         },
         {
           "label": "type",
