@@ -91,6 +91,7 @@ type requestEntry struct {
 	replyOnce   sync.Once
 	release     chan struct{}
 	releaseOnce sync.Once
+	signature   *signatureRequest
 }
 
 func (e *requestEntry) closeRelease() {
@@ -150,14 +151,15 @@ func (r *requestRegistry) cancelAll() {
 }
 
 type Server struct {
-	transport      protocol.Transport
-	projects       *workspace.ProjectService
-	compiler       *compile.CompilationService
-	completion     *completion.Service
-	bus            *event.Bus
-	versionSupport bool
-	initialized    bool
-	shuttingDown   bool
+	transport        protocol.Transport
+	projects         *workspace.ProjectService
+	compiler         *compile.CompilationService
+	completion       *completion.Service
+	bus              *event.Bus
+	versionSupport   bool
+	signatureOffsets bool
+	initialized      bool
+	shuttingDown     bool
 
 	writeMu sync.Mutex // serializes framed writes (Serve + CE subscriber)
 
@@ -341,6 +343,9 @@ func (s *Server) handleTrackedRequest(ctx context.Context, message protocol.Mess
 	if message.Method == testBlockMethod {
 		entry.release = make(chan struct{})
 	}
+	if message.Method == "textDocument/signatureHelp" {
+		entry.signature = s.captureSignature(message.Params)
+	}
 	s.requestWG.Add(1)
 	go func() {
 		defer s.requestWG.Done()
@@ -392,6 +397,9 @@ func (s *Server) dispatchTracked(ctx context.Context, message protocol.Message) 
 		return s.handleTestBlockRequest(ctx, message)
 	case "textDocument/completion":
 		return s.handleCompletion(ctx, message)
+	case "textDocument/signatureHelp":
+		id, _ := requestIDKey(message.ID)
+		return s.handleSignature(ctx, s.registry.lookup(id).signature)
 	}
 	return trackedResult{}
 }
@@ -427,6 +435,13 @@ func (s *Server) handleInitialize(_ context.Context, params json.RawMessage) (an
 	}
 	s.initialized = true
 	if caps, ok := initializeParams.Capabilities.TextDocument.Value(); ok {
+		if signatureCaps, ok := caps.SignatureHelp.Value(); ok {
+			if information, ok := signatureCaps.SignatureInformation.Value(); ok {
+				if parameters, ok := information.ParameterInformation.Value(); ok {
+					s.signatureOffsets, _ = parameters.LabelOffsetSupport.Value()
+				}
+			}
+		}
 		if diagCaps, ok := caps.PublishDiagnostics.Value(); ok {
 			if versionSupport, ok := diagCaps.VersionSupport.Value(); ok {
 				s.versionSupport = versionSupport
@@ -439,8 +454,9 @@ func (s *Server) handleInitialize(_ context.Context, params json.RawMessage) (an
 		Save:      protocol.NewOptional(protocol.NewOrTextDocumentSyncOptionsSaveBoolean(true)),
 	}
 	return protocol.InitializeResult{Capabilities: protocol.ServerCapabilities{
-		TextDocumentSync:   protocol.NewOptional(protocol.NewOrServerCapabilitiesTextDocumentSyncTextDocumentSyncOptions(opts)),
-		CompletionProvider: protocol.NewOptional(protocol.CompletionOptions{}),
+		TextDocumentSync:      protocol.NewOptional(protocol.NewOrServerCapabilitiesTextDocumentSyncTextDocumentSyncOptions(opts)),
+		CompletionProvider:    protocol.NewOptional(protocol.CompletionOptions{}),
+		SignatureHelpProvider: protocol.NewOptional(protocol.SignatureHelpOptions{TriggerCharacters: protocol.NewOptional([]string{"(", ","})}),
 	}}, true
 }
 

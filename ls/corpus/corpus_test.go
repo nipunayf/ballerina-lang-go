@@ -24,6 +24,7 @@ import (
 	"io"
 	"path"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -34,16 +35,19 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/ls/server"
 	"github.com/ballerina-nutcracker/ballerina/platform/pal"
 	"github.com/ballerina-nutcracker/ballerina/platform/palnative"
+	"github.com/ballerina-nutcracker/ballerina/projects"
 )
 
 var update = flag.Bool("update", false, "update LSP corpus golden files")
 
 type transcript struct {
-	Source   string            `json:"source"`  // single-file fixture: filename under testdata
-	Sources  map[string]string `json:"sources"` // multi-file: relative path → content
-	Root     string            `json:"-"`       // temp root path (set at runtime, not serialized)
-	Messages []json.RawMessage `json:"messages"`
-	Expected []json.RawMessage `json:"expected"`
+	Source                  string            `json:"source"`  // single-file fixture: filename under testdata
+	Sources                 map[string]string `json:"sources"` // multi-file: relative path → content
+	Root                    string            `json:"-"`       // temp root path (set at runtime, not serialized)
+	Messages                []json.RawMessage `json:"messages"`
+	Expected                []json.RawMessage `json:"expected"`
+	HoldSignatureDependency bool              `json:"holdSignatureDependency,omitempty"`
+	Unordered               bool              `json:"unordered,omitempty"`
 }
 
 // stepTransport feeds the server one segment of framed LSP messages at a
@@ -64,8 +68,9 @@ func (t *stepTransport) Write(p []byte) (int, error) { return t.writer.Write(p) 
 // between LSP batches. A $pal/writeFile entry in the transcript becomes a
 // palWrite segment.
 type segment struct {
-	input    bytes.Buffer // framed LSP messages for this batch
-	palWrite *palWriteAction
+	input           bytes.Buffer // framed LSP messages for this batch
+	palWrite        *palWriteAction
+	signatureAction string
 }
 
 type palWriteAction struct {
@@ -190,27 +195,63 @@ func runTranscript(t *testing.T, platform pal.Platform, fixturePath string) {
 	transport := &stepTransport{}
 	bus := event.New()
 	defer bus.Close()
-	projectService := workspace.New(platform, bus)
+	var gate *signatureGateRepository
+	var workspaceOptions []workspace.Option
+	if fixture.HoldSignatureDependency {
+		gate = newSignatureGateRepository(workspace.NewFileSystemRepository(platform, path.Join(rootPath, "repository")))
+		workspaceOptions = append(workspaceOptions, workspace.WithRepositories([]projects.Repository{gate}))
+	}
+	projectService := workspace.New(platform, bus, workspaceOptions...)
 	compiler := compile.New(projectService, bus, compile.WithDebounce(0))
 	defer compiler.Shutdown()
 	srv := server.New(transport, projectService, compiler, bus)
-	defer srv.Flush()
+	defer func() {
+		if gate != nil {
+			gate.release()
+		}
+		srv.Flush()
+	}()
 	var actual []json.RawMessage
 	for _, seg := range segments {
+		if seg.signatureAction != "" {
+			if gate == nil {
+				t.Fatal("signature dependency action needs holdSignatureDependency")
+			}
+			if seg.signatureAction == awaitSignatureDependency {
+				<-gate.entered
+				if _, _, sealed := compiler.DiagnosticsFor(rootPath); sealed {
+					t.Fatal("signature dependency gate must precede a sealed generation")
+				}
+			} else {
+				gate.release()
+			}
+			continue
+		}
 		if seg.palWrite != nil {
 			applyPalWrite(t, platform, rootPath, seg.palWrite)
 			continue
 		}
 		transport.reader = bytes.NewReader(seg.input.Bytes())
-		transport.writer.Reset()
+		if gate == nil {
+			transport.writer.Reset()
+		}
 		if err := srv.Serve(); err != nil {
 			t.Fatalf("Serve: %v", err)
+		}
+		if gate != nil {
+			continue
 		}
 		segActual, err := readMessages(transport.writer.Bytes())
 		if err != nil {
 			t.Fatal(err)
 		}
 		actual = append(actual, segActual...)
+	}
+	if gate != nil {
+		actual, err = readMessages(transport.writer.Bytes())
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	if *update {
 		fixture.Expected = actual
@@ -243,7 +284,17 @@ func runTranscript(t *testing.T, platform pal.Platform, fixturePath string) {
 			actualNorm[i] = []byte(s)
 		}
 	}
-	if !reflect.DeepEqual(normalizeMessages(actualNorm), normalizeMessages(expectedNorm)) {
+	actualValues, expectedValues := normalizeMessages(actualNorm), normalizeMessages(expectedNorm)
+	if fixture.Unordered {
+		less := func(values []any, i, j int) bool {
+			a, _ := json.Marshal(values[i])
+			b, _ := json.Marshal(values[j])
+			return bytes.Compare(a, b) < 0
+		}
+		sort.Slice(actualValues, func(i, j int) bool { return less(actualValues, i, j) })
+		sort.Slice(expectedValues, func(i, j int) bool { return less(expectedValues, i, j) })
+	}
+	if !reflect.DeepEqual(actualValues, expectedValues) {
 		t.Fatalf("transcript output mismatch\nactual: %s\nexpected: %s", formatMessages(actual), formatMessages(fixture.Expected))
 	}
 }
@@ -263,6 +314,11 @@ func buildSegments(messages []protocol.Message) []segment {
 		}
 	}
 	for _, message := range messages {
+		if message.Method == awaitSignatureDependency || message.Method == releaseSignatureDependency {
+			flush()
+			segments = append(segments, segment{signatureAction: message.Method})
+			continue
+		}
 		if message.Method == palWriteMethod {
 			var action palWriteAction
 			if err := json.Unmarshal(message.Params, &action); err != nil {
