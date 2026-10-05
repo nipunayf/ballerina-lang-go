@@ -47,6 +47,7 @@ type transcript struct {
 	Messages                []json.RawMessage `json:"messages"`
 	Expected                []json.RawMessage `json:"expected"`
 	HoldSignatureDependency bool              `json:"holdSignatureDependency,omitempty"`
+	SignatureRepository     bool              `json:"signatureRepository,omitempty"`
 	Unordered               bool              `json:"unordered,omitempty"`
 }
 
@@ -158,6 +159,12 @@ func TestModifierChainIdenticalOutputCorpus(t *testing.T) {
 // drivers map (instead of carrying its prior moduleDriver forward by
 // reference) would fall into invisibly, since no single-file fixture can
 // exercise a second module at all.
+func TestUnresolvableDependencyCompletionCorpus(t *testing.T) {
+	platform, cleanup := palnative.NewPlatform()
+	defer cleanup()
+	runTranscript(t, platform, "completion/testdata/unresolvable-dependency.completion.json")
+}
+
 func TestIncrementalCarryForwardPreservesDiagnosticsCorpus(t *testing.T) {
 	platform, cleanup := palnative.NewPlatform()
 	defer cleanup()
@@ -200,6 +207,10 @@ func runTranscript(t *testing.T, platform pal.Platform, fixturePath string) {
 	if fixture.HoldSignatureDependency {
 		gate = newSignatureGateRepository(workspace.NewFileSystemRepository(platform, path.Join(rootPath, "repository")))
 		workspaceOptions = append(workspaceOptions, workspace.WithRepositories([]projects.Repository{gate}))
+	} else if fixture.SignatureRepository {
+		workspaceOptions = append(workspaceOptions, workspace.WithRepositories([]projects.Repository{
+			workspace.NewFileSystemRepository(platform, path.Join(rootPath, "repository")),
+		}))
 	}
 	projectService := workspace.New(platform, bus, workspaceOptions...)
 	compiler := compile.New(projectService, bus, compile.WithDebounce(0))
