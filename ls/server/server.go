@@ -30,7 +30,6 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/ls/core/completion"
 	"github.com/ballerina-nutcracker/ballerina/ls/core/event"
 	"github.com/ballerina-nutcracker/ballerina/ls/core/observability"
-	"github.com/ballerina-nutcracker/ballerina/ls/core/uri"
 	"github.com/ballerina-nutcracker/ballerina/ls/core/workspace"
 	"github.com/ballerina-nutcracker/ballerina/ls/protocol"
 )
@@ -612,7 +611,7 @@ func (s *Server) handleDidOpen(params json.RawMessage) error {
 	if json.Unmarshal(params, &didOpen) != nil {
 		return nil
 	}
-	docURI, err := uri.NewFileURI(didOpen.TextDocument.URI)
+	docURI, err := workspace.NewFileURI(didOpen.TextDocument.URI)
 	if err != nil {
 		return nil
 	}
@@ -635,7 +634,7 @@ func (s *Server) handleDidChange(params json.RawMessage) error {
 	if json.Unmarshal(params, &didChange) != nil {
 		return nil
 	}
-	docURI, err := uri.NewFileURI(didChange.TextDocument.URI)
+	docURI, err := workspace.NewFileURI(didChange.TextDocument.URI)
 	if err != nil {
 		return nil
 	}
@@ -665,7 +664,7 @@ func (s *Server) handleDidClose(params json.RawMessage) error {
 	if json.Unmarshal(params, &didClose) != nil {
 		return nil
 	}
-	docURI, err := uri.NewFileURI(didClose.TextDocument.URI)
+	docURI, err := workspace.NewFileURI(didClose.TextDocument.URI)
 	if err != nil {
 		return nil
 	}
@@ -803,7 +802,7 @@ func (s *Server) handleDidChangeWatchedFiles(params json.RawMessage) error {
 		return nil
 	}
 	for _, fileEvent := range didChange.Changes {
-		docURI, err := uri.NewFileURI(fileEvent.URI)
+		docURI, err := workspace.NewFileURI(fileEvent.URI)
 		if err != nil {
 			continue
 		}
