@@ -93,7 +93,13 @@
             "change": 2,
             "save": true
           },
-          "completionProvider": {}
+          "completionProvider": {},
+          "signatureHelpProvider": {
+            "triggerCharacters": [
+              "(",
+              ","
+            ]
+          }
         }
       }
     },
