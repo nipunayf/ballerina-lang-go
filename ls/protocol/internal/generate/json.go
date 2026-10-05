@@ -38,8 +38,27 @@ func (g *generator) writeUnionJSON(out io.Writer) {
 	for _, t := range g.reg.GeneratedTypes() {
 		if t.Kind == KindOr {
 			g.writeUnionMarshalUnmarshal(out, t)
+		} else if t.Kind == KindTuple {
+			g.writeTupleJSON(out, t)
 		}
 	}
+}
+
+func (g *generator) writeTupleJSON(out io.Writer, t *Type) {
+	name, ok := g.reg.GeneratedName(t)
+	if !ok {
+		return
+	}
+	fmt.Fprintf(out, "func (t %s) MarshalJSON() ([]byte, error) {\nreturn json.Marshal([]any{", name)
+	for i := range t.Items {
+		fmt.Fprintf(out, "t.Item%d,", i)
+	}
+	fmt.Fprint(out, "})\n}\n\n")
+	fmt.Fprintf(out, "func (t *%s) UnmarshalJSON(data []byte) error {\nvar items []json.RawMessage\nif err := json.Unmarshal(data, &items); err != nil { return err }\nif len(items) != %d { return fmt.Errorf(\"tuple requires %d elements\") }\nvar value %s\n", name, len(t.Items), len(t.Items), name)
+	for i := range t.Items {
+		fmt.Fprintf(out, "if string(items[%d]) == \"null\" { return fmt.Errorf(\"tuple element cannot be null\") }\nif err := json.Unmarshal(items[%d], &value.Item%d); err != nil { return err }\n", i, i, i)
+	}
+	fmt.Fprint(out, "*t = value\nreturn nil\n}\n\n")
 }
 
 func (g *generator) writeWrapperJSON(out io.Writer) {
