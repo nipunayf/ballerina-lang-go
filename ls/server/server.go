@@ -187,6 +187,23 @@ func WithLogger(logger *observability.Logger) Option {
 	}
 }
 
+// WithCompletionOptions applies additional completion.Option values (e.g.
+// completion.WithASTDebugLogging paired with completion.WithLogger) when
+// constructing the server's completion service. Like WithAvailablePackages,
+// it rebuilds s.completion, so combine both into one call if both are
+// needed rather than chaining the two Options.
+func WithCompletionOptions(options ...completion.Option) Option {
+	return func(s *Server) {
+		s.completion = completion.New(s.compiler, options...)
+	}
+}
+
+func WithAvailablePackages(packages []completion.AvailablePackage) Option {
+	return func(s *Server) {
+		s.completion = completion.New(s.compiler, completion.WithAvailablePackages(packages))
+	}
+}
+
 // New creates a Server with the given transport and core services. The bus is
 // used to subscribe to CE-E5a/E5b for out-of-band diagnostic publication. The
 // services are injected explicitly — the corpus driver wires
