@@ -274,6 +274,20 @@ func runTranscript(t *testing.T, platform pal.Platform, fixturePath string) {
 				fixture.Expected[i] = []byte(s)
 			}
 		}
+		if strings.HasPrefix(fixturePath, "signature/") {
+			expected, err := json.MarshalIndent(fixture.Expected, "  ", "  ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			updated, err := spliceTopLevelJSONField(content, "expected", expected)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := platform.FS.WriteFile(fixturePath, updated); err != nil {
+				t.Fatal(err)
+			}
+			return
+		}
 		updated, err := json.MarshalIndent(fixture, "", "  ")
 		if err != nil {
 			t.Fatal(err)
