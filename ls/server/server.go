@@ -150,15 +150,16 @@ func (r *requestRegistry) cancelAll() {
 }
 
 type Server struct {
-	transport        protocol.Transport
-	projects         *workspace.ProjectService
-	compiler         *compile.CompilationService
-	completion       *completion.Service
-	bus              *event.Bus
-	versionSupport   bool
-	signatureOffsets bool
-	initialized      bool
-	shuttingDown     bool
+	transport         protocol.Transport
+	projects          *workspace.ProjectService
+	compiler          *compile.CompilationService
+	completion        *completion.Service
+	bus               *event.Bus
+	versionSupport    bool
+	signatureOffsets  bool
+	signatureMarkdown bool
+	initialized       bool
+	shuttingDown      bool
 
 	writeMu sync.Mutex // serializes framed writes (Serve + CE subscriber)
 
@@ -453,9 +454,7 @@ func (s *Server) handleInitialize(_ context.Context, params json.RawMessage) (an
 	if caps, ok := initializeParams.Capabilities.TextDocument.Value(); ok {
 		if signatureCaps, ok := caps.SignatureHelp.Value(); ok {
 			if information, ok := signatureCaps.SignatureInformation.Value(); ok {
-				if parameters, ok := information.ParameterInformation.Value(); ok {
-					s.signatureOffsets, _ = parameters.LabelOffsetSupport.Value()
-				}
+				s.configureSignatureInformation(information)
 			}
 		}
 		if diagCaps, ok := caps.PublishDiagnostics.Value(); ok {
