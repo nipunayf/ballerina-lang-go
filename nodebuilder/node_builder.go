@@ -6406,7 +6406,7 @@ func (n *nodeBuilder) malformedExpression(node st.Node) bool {
 			return false
 		}
 		if reference, ok := child.(*st.SimpleNameReferenceNode); ok {
-			if reference.Name().IsMissing() {
+			if reference.Name().IsMissing() && !isArgumentExpression(reference) {
 				return false
 			}
 		}
@@ -6438,6 +6438,11 @@ func (n *nodeBuilder) malformedExpression(node st.Node) bool {
 		}
 		return true
 	})
+}
+
+func isArgumentExpression(node st.Node) bool {
+	parent := node.Parent()
+	return parent != nil && (parent.Kind() == st.POSITIONAL_ARG || parent.Kind() == st.NAMED_ARG)
 }
 
 func (n *nodeBuilder) syntaxError(node st.Node) {
