@@ -35,7 +35,8 @@ type cursor struct {
 }
 
 func newCursor(req Request, sm compile.SealedModule, packages []AvailablePackage) *cursor {
-	fileIndex := sm.Context().DiagnosticEnv().FileIndex(req.URI.Path())
+	name, _ := sm.NameOf(req.URI)
+	fileIndex := sm.Context().DiagnosticEnv().FileIndex(name)
 	c := &cursor{req: req, sm: sm, packages: packages, chain: nodeChainAtOffset(sm.PackageNode(), req.Offset, fileIndex)}
 	c.winnerNode, c.winnerMatched = nearestChainMatch(c)
 	return c

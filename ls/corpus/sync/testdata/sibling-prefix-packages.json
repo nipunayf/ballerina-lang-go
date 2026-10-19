@@ -1,0 +1,211 @@
+{
+  "source": "",
+  "sources": {
+    "shop/Ballerina.toml": "[package]\norg = \"ls\"\nname = \"shop\"\nversion = \"0.1.0\"\n",
+    "shop/main.bal": "function identify(int first) returns int { return first; }\nfunction main() {\n    int unusedA = identify(1);\n}\n",
+    "shop2/Ballerina.toml": "[package]\norg = \"ls\"\nname = \"shop2\"\nversion = \"0.1.0\"\n",
+    "shop2/main.bal": "function identify(string second) returns string { return second; }\nfunction main() {\n    string unusedB = identify(\"b\");\n}\n"
+  },
+  "messages": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "initialize",
+      "params": {}
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/didOpen",
+      "params": {
+        "textDocument": {
+          "uri": "file://${root}/shop/main.bal",
+          "languageId": "ballerina",
+          "version": 1,
+          "text": "function identify(int first) returns int { return first; }\nfunction main() {\n    int unusedA = identify(1);\n}\n"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/didOpen",
+      "params": {
+        "textDocument": {
+          "uri": "file://${root}/shop2/main.bal",
+          "languageId": "ballerina",
+          "version": 1,
+          "text": "function identify(string second) returns string { return second; }\nfunction main() {\n    string unusedB = identify(\"b\");\n}\n"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "$pal/flush",
+      "params": {}
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "textDocument/signatureHelp",
+      "params": {
+        "textDocument": {
+          "uri": "file://${root}/shop/main.bal"
+        },
+        "position": {
+          "line": 2,
+          "character": 28
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "$pal/flushRequests",
+      "params": {}
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "method": "textDocument/signatureHelp",
+      "params": {
+        "textDocument": {
+          "uri": "file://${root}/shop2/main.bal"
+        },
+        "position": {
+          "line": 2,
+          "character": 31
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "$pal/flushRequests",
+      "params": {}
+    }
+  ],
+  "expected": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "capabilities": {
+          "textDocumentSync": {
+            "openClose": true,
+            "change": 2,
+            "save": true
+          },
+          "completionProvider": {
+            "triggerCharacters": [
+              ":",
+              ".",
+              "\u003e",
+              "@",
+              "/",
+              "\\",
+              "?"
+            ]
+          },
+          "signatureHelpProvider": {
+            "triggerCharacters": [
+              "(",
+              ","
+            ]
+          }
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "uri": "file://${root}/shop/main.bal",
+        "diagnostics": [
+          {
+            "range": {
+              "start": {
+                "line": 2,
+                "character": 4
+              },
+              "end": {
+                "line": 2,
+                "character": 30
+              }
+            },
+            "severity": 1,
+            "code": "SEMANTIC_ERROR",
+            "source": "ballerina",
+            "message": "unused variable 'unusedA'"
+          }
+        ]
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "uri": "file://${root}/shop2/main.bal",
+        "diagnostics": [
+          {
+            "range": {
+              "start": {
+                "line": 2,
+                "character": 4
+              },
+              "end": {
+                "line": 2,
+                "character": 35
+              }
+            },
+            "severity": 1,
+            "code": "SEMANTIC_ERROR",
+            "source": "ballerina",
+            "message": "unused variable 'unusedB'"
+          }
+        ]
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "result": {
+        "signatures": [
+          {
+            "label": "identify(int first)",
+            "parameters": [
+              {
+                "label": "int first",
+                "documentation": {
+                  "kind": "markdown",
+                  "value": "**Parameter**  \n**`int`first**"
+                }
+              }
+            ]
+          }
+        ],
+        "activeSignature": 0,
+        "activeParameter": 0
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "result": {
+        "signatures": [
+          {
+            "label": "identify(string second)",
+            "parameters": [
+              {
+                "label": "string second",
+                "documentation": {
+                  "kind": "markdown",
+                  "value": "**Parameter**  \n**`string`second**"
+                }
+              }
+            ]
+          }
+        ],
+        "activeSignature": 0,
+        "activeParameter": 0
+      }
+    }
+  ],
+  "unordered": true
+}

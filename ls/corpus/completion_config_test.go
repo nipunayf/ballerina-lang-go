@@ -19,7 +19,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/fs"
+	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -31,8 +34,6 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/ls/core/workspace"
 	"github.com/ballerina-nutcracker/ballerina/ls/protocol"
 	"github.com/ballerina-nutcracker/ballerina/ls/server"
-	"github.com/ballerina-nutcracker/ballerina/platform/pal"
-	"github.com/ballerina-nutcracker/ballerina/platform/palnative"
 	"github.com/ballerina-nutcracker/ballerina/projects"
 )
 
@@ -69,8 +70,6 @@ type completionConfigEnv struct {
 }
 
 func TestEnumDeclarationCompletionConfigs(t *testing.T) {
-	platform, cleanup := palnative.NewPlatform()
-	defer cleanup()
 	env := completionConfigEnv{
 		ConfigDir:   "completion/testdata/enum_decl_ctx/config",
 		PackageOrg:  "completion",
@@ -79,16 +78,14 @@ func TestEnumDeclarationCompletionConfigs(t *testing.T) {
 		ProjectRoot: "enum_decl_ctx/source/projectls",
 		Packages:    enumMemberAvailablePackages,
 	}
-	configs := discoverCompletionConfigs(t, platform, env.ConfigDir)
+	configs := discoverCompletionConfigs(t, env.ConfigDir)
 	if len(configs) != 5 {
 		t.Fatalf("completion config count = %d, want 5", len(configs))
 	}
-	runCompletionConfigs(t, platform, env, configs)
+	runCompletionConfigs(t, env, configs)
 }
 
 func TestTypeDefinitionCompletionConfigs(t *testing.T) {
-	platform, cleanup := palnative.NewPlatform()
-	defer cleanup()
 	env := completionConfigEnv{
 		ConfigDir:   "completion/testdata/type_def/config",
 		PackageOrg:  "completion",
@@ -96,16 +93,14 @@ func TestTypeDefinitionCompletionConfigs(t *testing.T) {
 		Repository:  "repository",
 		Packages:    typeDefinitionAvailablePackages,
 	}
-	configs := discoverCompletionConfigs(t, platform, env.ConfigDir)
+	configs := discoverCompletionConfigs(t, env.ConfigDir)
 	if len(configs) != 7 {
 		t.Fatalf("completion config count = %d, want 7", len(configs))
 	}
-	runCompletionConfigs(t, platform, env, configs)
+	runCompletionConfigs(t, env, configs)
 }
 
 func TestModuleVarContextCompletionConfigs(t *testing.T) {
-	platform, cleanup := palnative.NewPlatform()
-	defer cleanup()
 	env := completionConfigEnv{
 		ConfigDir:   "completion/testdata/module_var_context/config",
 		PackageOrg:  "completion",
@@ -113,19 +108,19 @@ func TestModuleVarContextCompletionConfigs(t *testing.T) {
 		Repository:  "repository",
 		Packages:    typeDefinitionAvailablePackages,
 	}
-	configs := discoverCompletionConfigs(t, platform, env.ConfigDir)
+	configs := discoverCompletionConfigs(t, env.ConfigDir)
 	if len(configs) != 1 {
 		t.Fatalf("completion config count = %d, want 1", len(configs))
 	}
-	runCompletionConfigs(t, platform, env, configs)
+	runCompletionConfigs(t, env, configs)
 }
 
 // discoverCompletionConfigs lists configDir's config JSON files in a
 // deterministic order. Any expected count is the caller's concern, not
 // this generic directory scan's.
-func discoverCompletionConfigs(t *testing.T, platform pal.Platform, configDir string) []string {
+func discoverCompletionConfigs(t *testing.T, configDir string) []string {
 	t.Helper()
-	entries, err := platform.FS.ReadDir(configDir)
+	entries, err := fs.ReadDir(os.DirFS("."), configDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +143,7 @@ func skipList() []string {
 	}
 }
 
-func runCompletionConfigs(t *testing.T, platform pal.Platform, env completionConfigEnv, configs []string) {
+func runCompletionConfigs(t *testing.T, env completionConfigEnv, configs []string) {
 	t.Helper()
 	skips := skipList()
 	for _, configPath := range configs {
@@ -157,14 +152,14 @@ func runCompletionConfigs(t *testing.T, platform pal.Platform, env completionCon
 			if slices.Contains(skips, path.Clean(configPath)) {
 				t.Skip()
 			}
-			config, raw := readCompletionConfig(t, platform, configPath)
-			source, err := platform.FS.ReadFile(path.Join("completion/testdata", config.Source))
+			config, raw := readCompletionConfig(t, configPath)
+			source, err := fs.ReadFile(os.DirFS("."), path.Join("completion/testdata", config.Source))
 			if err != nil {
 				t.Fatal(err)
 			}
-			actual := completionConfigRequest(t, platform, env, config.Source, string(source), config.Position)
+			actual := completionConfigRequest(t, env, config.Source, string(source), config.Position)
 			if *update {
-				writeCompletionConfigItems(t, platform, configPath, raw, actual)
+				writeCompletionConfigItems(t, configPath, raw, actual)
 				return
 			}
 			compareCompletionConfigItems(t, config.Items, actual)
@@ -172,9 +167,9 @@ func runCompletionConfigs(t *testing.T, platform pal.Platform, env completionCon
 	}
 }
 
-func readCompletionConfig(t *testing.T, platform pal.Platform, configPath string) (completionConfig, []byte) {
+func readCompletionConfig(t *testing.T, configPath string) (completionConfig, []byte) {
 	t.Helper()
-	content, err := platform.FS.ReadFile(configPath)
+	content, err := fs.ReadFile(os.DirFS("."), configPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +186,7 @@ func readCompletionConfig(t *testing.T, platform pal.Platform, configPath string
 // a decode/re-encode round trip, this can never drift the upstream config's
 // byte-for-byte fixture bytes for anything other than the field being
 // updated.
-func writeCompletionConfigItems(t *testing.T, platform pal.Platform, configPath string, raw []byte, items []protocol.CompletionItem) {
+func writeCompletionConfigItems(t *testing.T, configPath string, raw []byte, items []protocol.CompletionItem) {
 	t.Helper()
 	encodedItems, err := json.Marshal(items)
 	if err != nil {
@@ -201,51 +196,51 @@ func writeCompletionConfigItems(t *testing.T, platform pal.Platform, configPath 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := platform.FS.WriteFile(configPath, updated); err != nil {
+	if err := os.WriteFile(configPath, updated, 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func copyCompletionProject(t *testing.T, platform pal.Platform, from, to string) {
+func copyCompletionProject(t *testing.T, from, to string) {
 	t.Helper()
-	entries, err := platform.FS.ReadDir(from)
+	entries, err := fs.ReadDir(os.DirFS(from), ".")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := platform.FS.MkdirAll(to, 0o755); err != nil {
+	if err := os.MkdirAll(to, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	for _, entry := range entries {
 		source := path.Join(from, entry.Name())
 		destination := path.Join(to, entry.Name())
 		if entry.IsDir() {
-			copyCompletionProject(t, platform, source, destination)
+			copyCompletionProject(t, source, destination)
 			continue
 		}
-		content, err := platform.FS.ReadFile(source)
+		content, err := fs.ReadFile(os.DirFS(from), entry.Name())
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := platform.FS.WriteFile(destination, content); err != nil {
+		if err := os.WriteFile(destination, content, 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
 }
 
-func completionConfigRequest(t *testing.T, platform pal.Platform, env completionConfigEnv, sourcePath, source string, position protocol.Position) []protocol.CompletionItem {
+func completionConfigRequest(t *testing.T, env completionConfigEnv, sourcePath, source string, position protocol.Position) []protocol.CompletionItem {
 	t.Helper()
 	root := t.TempDir()
 	documentPath := path.Join(root, "main.bal")
 	if relative, ok := strings.CutPrefix(sourcePath, env.ProjectRoot+"/"); env.ProjectRoot != "" && ok {
 		root = path.Join(root, path.Base(env.ProjectRoot))
-		copyCompletionProject(t, platform, path.Join("completion/testdata", env.ProjectRoot), root)
+		copyCompletionProject(t, path.Join("completion/testdata", env.ProjectRoot), root)
 		documentPath = path.Join(root, relative)
 	} else {
 		toml := fmt.Sprintf("[package]\norg = %q\nname = %q\nversion = \"0.1.0\"\n", env.PackageOrg, env.PackageName)
-		if err := platform.FS.WriteFile(path.Join(root, "Ballerina.toml"), []byte(toml)); err != nil {
+		if err := os.WriteFile(path.Join(root, "Ballerina.toml"), []byte(toml), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := platform.FS.WriteFile(documentPath, []byte(source)); err != nil {
+		if err := os.WriteFile(documentPath, []byte(source), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -254,9 +249,9 @@ func completionConfigRequest(t *testing.T, platform pal.Platform, env completion
 	defer bus.Close()
 	var repositories []projects.Repository
 	if env.Repository != "" {
-		repositories = append(repositories, workspace.NewFileSystemRepository(platform, path.Join("completion/testdata", env.Repository)))
+		repositories = append(repositories, projects.NewFileSystemRepository(os.DirFS(filepath.Join("completion/testdata", env.Repository)), "."))
 	}
-	projectService := workspace.New(platform, bus, workspace.WithRepositories(repositories))
+	projectService := workspace.New(os.DirFS, bus, workspace.WithRepositories(repositories))
 	compiler := compile.New(projectService, bus, compile.WithDebounce(0))
 	defer compiler.Shutdown()
 	srv := server.New(transport, projectService, compiler, bus, server.WithAvailablePackages(env.Packages))

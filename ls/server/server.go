@@ -209,7 +209,7 @@ func WithAvailablePackages(packages []completion.AvailablePackage) Option {
 // New creates a Server with the given transport and core services. The bus is
 // used to subscribe to CE-E5a/E5b for out-of-band diagnostic publication. The
 // services are injected explicitly — the corpus driver wires
-// workspace.New(platform) and compile.New(platform, bus).
+// workspace.New(openDir, bus) and compile.New(projects, bus).
 func New(transport protocol.Transport, projects *workspace.ProjectService, compiler *compile.CompilationService, bus *event.Bus, opts ...Option) *Server {
 	s := &Server{
 		transport:     transport,
@@ -483,7 +483,7 @@ func (s *Server) handleInitialize(_ context.Context, params json.RawMessage) (an
 	}}, true
 }
 
-func (s *Server) handleNotification(_ context.Context, message protocol.Message) error {
+func (s *Server) handleNotification(ctx context.Context, message protocol.Message) error {
 	if message.Method == "exit" {
 		s.cancelAndDrainTrackedRequests()
 		if !s.shuttingDown {
@@ -512,15 +512,15 @@ func (s *Server) handleNotification(_ context.Context, message protocol.Message)
 	case cancelMethod:
 		return s.handleCancelRequest(message.Params)
 	case "textDocument/didOpen":
-		return s.handleDidOpen(message.Params)
+		return s.handleDidOpen(ctx, message.Params)
 	case "textDocument/didChange":
-		return s.handleDidChange(message.Params)
+		return s.handleDidChange(ctx, message.Params)
 	case "textDocument/didClose":
 		return s.handleDidClose(message.Params)
 	case "textDocument/didSave":
 		return nil
 	case "workspace/didChangeWatchedFiles":
-		return s.handleDidChangeWatchedFiles(message.Params)
+		return s.handleDidChangeWatchedFiles(ctx, message.Params)
 	default:
 		return nil
 	}
@@ -630,7 +630,7 @@ func (s *Server) Flush() {
 
 // handleDidOpen applies the open and returns nil — diagnostics arrive later via
 // the CE subscriber (branch 5). No synchronous Compile or publishDiagnostics.
-func (s *Server) handleDidOpen(params json.RawMessage) error {
+func (s *Server) handleDidOpen(ctx context.Context, params json.RawMessage) error {
 	var didOpen protocol.DidOpenTextDocumentParams
 	if json.Unmarshal(params, &didOpen) != nil {
 		return nil
@@ -646,6 +646,7 @@ func (s *Server) handleDidOpen(params json.RawMessage) error {
 		Version:    didOpen.TextDocument.Version,
 		LanguageID: string(didOpen.TextDocument.LanguageID),
 	}); err != nil {
+		loggerFromContext(ctx).Error("workspace open failed", "error", err)
 		return nil
 	}
 	return nil
@@ -653,7 +654,7 @@ func (s *Server) handleDidOpen(params json.RawMessage) error {
 
 // handleDidChange applies the update and returns nil — diagnostics arrive later
 // via the CE subscriber (branch 5).
-func (s *Server) handleDidChange(params json.RawMessage) error {
+func (s *Server) handleDidChange(ctx context.Context, params json.RawMessage) error {
 	var didChange protocol.DidChangeTextDocumentParams
 	if json.Unmarshal(params, &didChange) != nil {
 		return nil
@@ -676,6 +677,7 @@ func (s *Server) handleDidChange(params json.RawMessage) error {
 		Text:    fullText,
 		Version: didChange.TextDocument.Version,
 	}); err != nil {
+		loggerFromContext(ctx).Error("workspace update failed", "error", err)
 		return nil
 	}
 	return nil
@@ -820,7 +822,7 @@ func (s *Server) publishRootDiagnostics(root string, gen uint64) {
 // matching the file:-only routing of 09. Watched-file republishes flow through
 // ApplyWatchedFile (which bumps the generation and publishes ProjectUpdated);
 // diagnostics arrive later via the CE subscriber.
-func (s *Server) handleDidChangeWatchedFiles(params json.RawMessage) error {
+func (s *Server) handleDidChangeWatchedFiles(ctx context.Context, params json.RawMessage) error {
 	var didChange protocol.DidChangeWatchedFilesParams
 	if json.Unmarshal(params, &didChange) != nil {
 		return nil
@@ -841,7 +843,8 @@ func (s *Server) handleDidChangeWatchedFiles(params json.RawMessage) error {
 		default:
 			continue
 		}
-		if err := s.projects.ApplyWatchedFile(context.Background(), change); err != nil {
+		if err := s.projects.ApplyWatchedFile(ctx, change); err != nil {
+			loggerFromContext(ctx).Error("workspace watched-file update failed", "error", err)
 			continue
 		}
 	}

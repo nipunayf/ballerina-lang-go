@@ -681,7 +681,8 @@ func typeDefinitionHasTopLevelToken(tokens []typeDefinitionToken, text string) b
 
 func typeDefinitionCurrentDocumentSymbol(c *cursor, ref model.SymbolRef) bool {
 	location := c.sm.Context().SymbolLocation(ref)
-	return c.sm.Context().DiagnosticEnv().FileName(location) == c.req.URI.Path()
+	name, ok := c.sm.NameOf(c.req.URI)
+	return ok && c.sm.Context().DiagnosticEnv().FileName(location) == name
 }
 
 func typeDefinitionPackageItems(c *cursor) []protocol.CompletionItem {

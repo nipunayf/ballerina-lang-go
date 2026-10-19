@@ -41,7 +41,11 @@ func At(ctx stdcontext.Context, sm compile.SealedModule, uri workspace.DocumentU
 	if !ok || offset < 0 || offset > len(text) {
 		return Help{}, false, nil
 	}
-	fileIndex := sm.Context().DiagnosticEnv().FileIndex(uri.Path())
+	name, ok := sm.NameOf(uri)
+	if !ok {
+		return Help{}, false, nil
+	}
+	fileIndex := sm.Context().DiagnosticEnv().FileIndex(name)
 	paths := nodeChainsAtOffset(sm.PackageNode(), offset, fileIndex)
 	node, args, empty := callAtPaths(paths, fileIndex)
 	if node == nil {
