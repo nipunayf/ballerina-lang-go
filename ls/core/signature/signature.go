@@ -24,10 +24,11 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/semtypes"
 )
 
-// Help contains byte ranges within Label, independent of wire coordinates.
+// Help is a rendered call signature and its active parameter.
 type Help struct {
-	Label                  string
-	Description            string
+	Label       string
+	Description string
+	// Parameters contains byte ranges within Label, not wire coordinates.
 	Parameters             [][2]int
 	ParameterDocumentation []parameterDocumentation
 	ActiveParameter        *int
@@ -118,8 +119,8 @@ func emptyCallContext(paths [][]ast.BLangNode, call ast.BLangNode, args []ast.BL
 	return true
 }
 
-// loweredMethodCallAlias returns the synthetic package alias of a call the type resolver rewrote
-// from x.f(args) to f(x, args...): the receiver is the first argument and the alias spans the whole call.
+// loweredMethodCallAlias recognizes langlib calls rewritten from x.f(args) to f(x, args...).
+// Their synthetic package alias spans the whole call.
 func loweredMethodCallAlias(call ast.BLangNode) (ast.BLangNode, bool) {
 	inv, ok := call.(*ast.BLangInvocation)
 	if !ok || inv.Expr != nil || inv.PkgAlias == nil || len(inv.ArgExprs) == 0 {
@@ -189,8 +190,8 @@ func argumentIndex(call ast.BLangNode, args []ast.BLangExpression, chain []ast.B
 	return 0, false
 }
 
-// isMalformedArgument reports whether arg is a bad node that spans source text. A zero-width bad
-// node is a missing argument (e.g. foo(1, )), which is still a valid place for signature help.
+// isMalformedArgument rejects bad nodes unless they have usable, zero-width locations
+// representing missing arguments (e.g. foo(1, )).
 func isMalformedArgument(arg ast.BLangExpression) bool {
 	if _, bad := arg.(*ast.BLangBadExprOrAction); !bad {
 		return false

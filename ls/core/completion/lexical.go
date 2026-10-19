@@ -17,10 +17,8 @@ package completion
 
 import "github.com/ballerina-nutcracker/ballerina/ls/protocol"
 
-// lexicalHandler is the seam's lowest-priority, most-general fallback: no
-// more specific handler above it matched, but the cursor still sits
-// somewhere with a resolvable enclosing scope -- migrated from classify()'s
-// kindLexical case verbatim (its "no chain-match at all" branch).
+// lexicalHandler offers visible symbols when no earlier handler or shared
+// cursor winner applies and the chain has an enclosing scope.
 var lexicalHandler = handler{
 	name:  "lexical",
 	match: matchLexical,

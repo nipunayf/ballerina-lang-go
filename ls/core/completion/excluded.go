@@ -20,16 +20,8 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/ls/protocol"
 )
 
-// The field-access/invocation/import families are today's silent
-// classify() fallthrough: no completion is offered inside a field access, a
-// call, or an import declaration. They're registered here as explicit no-op
-// handlers -- match true, build empty -- so a later per-provider ticket has
-// an existing entry to replace instead of an implicit "nothing matched"
-// fallthrough with no attachment point.
-//
-// All three ask cursor.winner() (cursor.go), the memoized migration of
-// classify()'s original single-pass walk, rather than independently
-// rescanning the chain -- see winner()'s doc comment for why that matters.
+// These handlers return no candidates when the shared cursor winner is a
+// field access, invocation, import, or module-qualified variable reference.
 
 var fieldAccessHandler = handler{
 	name:  "field-access",
@@ -43,13 +35,6 @@ var invocationHandler = handler{
 	build: noCompletionItems,
 }
 
-// importHandler also covers a module-qualified BLangVarRef (e.g. the `mod`
-// in `mod:name`). classify() grouped that with the import-prefix case since
-// both need module-scoped symbol enumeration to build real candidates --
-// moduleContentSymbols (module_symbols.go) is that shared lookup, ready for
-// whichever per-provider ticket replaces this no-op. The ADR doesn't name
-// this fourth node shape explicitly; folding it in here is this migration's
-// call, not a design decision.
 var importHandler = handler{
 	name:  "import",
 	match: matchImport,

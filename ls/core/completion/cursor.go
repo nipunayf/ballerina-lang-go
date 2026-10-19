@@ -42,20 +42,15 @@ func newCursor(req Request, sm compile.SealedModule, packages []AvailablePackage
 	return c
 }
 
-// winner returns the nearest (tail-to-head) chain node claimed by one of the
-// dispatch seam's migrated node-shape checks: field-access/invocation/
-// import/module-qualified-reference (the excluded-context family), block, or
-// module. Handlers for those families check this instead of independently
-// rescanning the whole chain themselves, which preserves classify()'s
-// original "nearest node wins" semantics: e.g. a block passed as a lambda
-// argument to a call must still win over the enclosing BLangInvocation, even
-// though both are present in the chain.
+// winner returns the cached nearestChainMatch result shared by the excluded,
+// block, module, and lexical handlers. A nested block can therefore take
+// precedence over an enclosing invocation.
 func (c *cursor) winner() (ast.BLangNode, bool) {
 	return c.winnerNode, c.winnerMatched
 }
 
-// nearestChainMatch is classify()'s original single-pass walk, unchanged,
-// now returning the winning node instead of setting a cursorKind field.
+// nearestChainMatch searches from the innermost chain node for an excluded
+// context, a block statement boundary, or a module declaration boundary.
 func nearestChainMatch(c *cursor) (ast.BLangNode, bool) {
 	for i := len(c.chain) - 1; i >= 0; i-- {
 		switch node := c.chain[i].(type) {
@@ -90,14 +85,8 @@ func isBadTopLevel(node ast.BLangNode) bool {
 	return ok
 }
 
-// containsBadNode reports whether node's subtree has any recovered bad node
-// (a malformed signature/declaration the parser couldn't structurally place,
-// e.g. a BLangFunction with an unparseable parameter list). Recovered
-// top-level nodes assemble into a real typed node (BLangFunction,
-// BLangTypeDefinition, ...), not a BLangBadTopLevelNode, so isBadTopLevel
-// alone misses them: the cursor otherwise falls into that malformed node's
-// own (unusable) context instead of module level, and lexicalHandler's
-// fallback offers no keywords.
+// containsBadNode detects bad nodes nested within a recovered declaration,
+// allowing nearestChainMatch to select the module context for that declaration.
 func containsBadNode(node ast.BLangNode) bool {
 	d := &badNodeDetector{}
 	ast.Walk(d, node)

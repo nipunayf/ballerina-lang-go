@@ -20,10 +20,8 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/ls/protocol"
 )
 
-// blockHandler offers block-level keywords plus lexically-visible symbols
-// when the cursor sits directly among a block's statements (not inside any
-// narrower construct) -- migrated from classify()'s kindBlock case
-// verbatim.
+// blockHandler offers block-level keywords and visible symbols at statement
+// boundaries, including recovered bad statements.
 var blockHandler = handler{
 	name:  "block",
 	match: matchBlock,

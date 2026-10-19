@@ -22,13 +22,8 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/semtypes"
 )
 
-// expectedTypeCompatible reports whether ty is assignable to expected under
-// c's type environment -- the seam's shared binary assignable/not-assignable
-// ranking signal (dispatch-seam ADR §4, ticket 36's expected-type hook).
-// lexicalItems uses this to build the label set it passes to
-// itemSet.itemsRanked; other handlers building their own itemSet can call it
-// directly instead of re-deriving the semtypes.IsSubtype call and its
-// Context plumbing.
+// expectedTypeCompatible reports whether ty is a subtype of expected in c's
+// type environment.
 func expectedTypeCompatible(c *cursor, ty, expected semtypes.SemType) bool {
 	return semtypes.IsSubtype(semtypes.ContextFrom(c.sm.Context().GetTypeEnv()), ty, expected)
 }

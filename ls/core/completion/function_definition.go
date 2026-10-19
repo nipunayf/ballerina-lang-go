@@ -22,10 +22,9 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/ls/protocol"
 )
 
-// functionDefinitionHandler offers the function keyword and function-definition
-// snippets when the cursor ends the partial name that follows both the isolated and
-// transactional qualifiers of a module-level definition, where the function
-// keyword is still missing.
+// functionDefinitionHandler offers the function keyword and definition snippets
+// after isolated and transactional qualifiers in a recovered module declaration,
+// when the cursor ends a name and the function keyword is missing.
 var functionDefinitionHandler = handler{
 	name:  "function-definition",
 	match: matchFunctionDefinition,

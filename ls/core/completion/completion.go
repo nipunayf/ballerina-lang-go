@@ -45,9 +45,8 @@ func WithAvailablePackages(packages []AvailablePackage) Option {
 	}
 }
 
-// WithLogger injects the observability facade the service uses for the AST
-// debug dump (see WithASTDebugLogging). The default (unset) is
-// observability.NewNoop().
+// WithLogger sets the logger used by WithASTDebugLogging. The default is
+// observability.NewNoop(); a nil logger leaves it unchanged.
 func WithLogger(logger *observability.Logger) Option {
 	return func(s *Service) {
 		if logger != nil {
@@ -56,12 +55,9 @@ func WithLogger(logger *observability.Logger) Option {
 	}
 }
 
-// WithASTDebugLogging turns on a per-request debug dump of the AST around
-// the completion cursor: the chain's root node, pretty-printed, with the
-// node dispatch() matched on bracketed by >>> <<<. This is a throwaway
-// diagnostic aid for iterating on completion dispatch, not a shipped
-// feature, so it's opt-in and off by default -- pair it with WithLogger to
-// actually see output (a noop logger discards it).
+// WithASTDebugLogging enables per-request logging of the pretty-printed AST
+// rooted at the first cursor-chain node. Logging is disabled by default;
+// use WithLogger to replace the default no-op logger.
 func WithASTDebugLogging() Option {
 	return func(s *Service) {
 		s.debugAST = true
