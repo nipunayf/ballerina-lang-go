@@ -14,6 +14,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+//go:build !wasip1
+
 package palnative
 
 import (
