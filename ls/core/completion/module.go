@@ -20,8 +20,6 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/ls/protocol"
 )
 
-// moduleHandler offers module-level snippets and visible symbols when the
-// shared cursor winner is the package, including recovered declarations.
 var moduleHandler = handler{
 	name:  "module",
 	match: matchModule,

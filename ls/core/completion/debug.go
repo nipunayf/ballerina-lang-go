@@ -20,8 +20,6 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/ls/core/observability"
 )
 
-// dumpCursorAST logs the AST rooted at the first cursor-chain node, the
-// cursor offset, and whether nearestChainMatch found a node.
 func dumpCursorAST(logger *observability.Logger, c *cursor) {
 	if len(c.chain) == 0 {
 		return

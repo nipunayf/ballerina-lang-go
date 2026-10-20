@@ -54,12 +54,6 @@ type completionConfigItem struct {
 	AdditionalTextEdits json.RawMessage `json:"additionalTextEdits"`
 }
 
-// completionConfigEnv is the deterministic fixture environment a raw
-// completion-config directory runs under: the config directory itself, the
-// package identity its temp project is opened as, the test-only repository
-// backing its external imports (if any), and the available-package catalog
-// handed to the server. A later raw completion directory supplies its own
-// values instead of the generic runner assuming type_def's.
 type completionConfigEnv struct {
 	ConfigDir   string
 	PackageOrg  string
@@ -115,9 +109,6 @@ func TestModuleVarContextCompletionConfigs(t *testing.T) {
 	runCompletionConfigs(t, env, configs)
 }
 
-// discoverCompletionConfigs lists configDir's config JSON files in a
-// deterministic order. Any expected count is the caller's concern, not
-// this generic directory scan's.
 func discoverCompletionConfigs(t *testing.T, configDir string) []string {
 	t.Helper()
 	entries, err := fs.ReadDir(os.DirFS("."), configDir)
@@ -180,12 +171,7 @@ func readCompletionConfig(t *testing.T, configPath string) (completionConfig, []
 	return config, content
 }
 
-// writeCompletionConfigItems replaces only raw's top-level "items" value
-// with items' encoding, leaving every other byte of the config file --
-// including key order, spacing, and every other field -- untouched. Unlike
-// a decode/re-encode round trip, this can never drift the upstream config's
-// byte-for-byte fixture bytes for anything other than the field being
-// updated.
+// Splice the items so golden updates preserve unrelated fixture formatting.
 func writeCompletionConfigItems(t *testing.T, configPath string, raw []byte, items []protocol.CompletionItem) {
 	t.Helper()
 	encodedItems, err := json.Marshal(items)
@@ -306,8 +292,6 @@ func completionConfigRequest(t *testing.T, env completionConfigEnv, sourcePath, 
 	return nil
 }
 
-// typeDefinitionAvailablePackages mirrors the package identities mocked by
-// Java LS AbstractLSTest; production completion has no configured catalog.
 var enumMemberAvailablePackages = append(append([]completion.AvailablePackage(nil), typeDefinitionAvailablePackages...),
 	completion.AvailablePackage{Organization: "ballerina", Name: "jballerina.java"},
 	completion.AvailablePackage{Organization: "projectls", Name: "constants"},
@@ -335,12 +319,7 @@ func completionConfigMessage(id any, method string, params any) protocol.Message
 	return protocol.Message{JSONRPC: "2.0", ID: encodedID, Method: method, Params: encodedParams}
 }
 
-// compareCompletionConfigItems requires actual and expected to hold the same
-// multiset of signatures -- an exact, order-agnostic count comparison, not
-// mere subset containment: each expected signature consumes one matching
-// occurrence from actual's remaining counts, so a duplicate in expected must
-// be matched by an equal duplicate in actual, and the upfront length check
-// then guarantees actual carries nothing beyond what expected accounts for.
+// Completion order is ignored, but duplicate counts must match.
 func compareCompletionConfigItems(t *testing.T, expected []completionConfigItem, actual []protocol.CompletionItem) {
 	t.Helper()
 	if len(actual) != len(expected) {
@@ -370,8 +349,7 @@ func compareCompletionConfigItems(t *testing.T, expected []completionConfigItem,
 	}
 }
 
-// completionConfigSignature intentionally ignores Java-comparator fields that
-// are not represented consistently here: kind, documentation, and insertTextFormat.
+// Comparison excludes kind, documentation, and insertTextFormat.
 func completionConfigSignature(encoded []byte) string {
 	var item completionConfigItem
 	_ = json.Unmarshal(encoded, &item)

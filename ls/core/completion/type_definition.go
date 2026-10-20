@@ -105,9 +105,6 @@ func typeDefinitionQualifiedItems(c *cursor, alias string) []protocol.Completion
 	return set.items()
 }
 
-// typeDefinitionSymbolItem builds a type-position item for ref. pkgNode is
-// the starting package for declaration lookups; constants use value details,
-// while type symbols use structural classification.
 func typeDefinitionSymbolItem(c *cursor, pkgNode *ast.BLangPackage, ref model.SymbolRef, enumMember bool) protocol.CompletionItem {
 	ctx := c.sm.Context()
 	name := ctx.SymbolName(ref)
@@ -128,9 +125,6 @@ func typeDefinitionSymbolItem(c *cursor, pkgNode *ast.BLangPackage, ref model.Sy
 	return item
 }
 
-// typeDefinitionConstantItem uses "Singleton" for current-document constants;
-// others use the resolved type detail or fall back to the literal initializer.
-// Enum members have a separate relevance tier.
 func typeDefinitionConstantItem(c *cursor, pkgNode *ast.BLangPackage, ref model.SymbolRef, name string, item protocol.CompletionItem, enumMember bool) protocol.CompletionItem {
 	switch {
 	case typeDefinitionCurrentDocumentSymbol(c, ref):
@@ -150,7 +144,6 @@ func typeDefinitionConstantItem(c *cursor, pkgNode *ast.BLangPackage, ref model.
 	return item
 }
 
-// constantLiteralDetail reads the named constant's literal initializer.
 func constantLiteralDetail(pkgNode *ast.BLangPackage, name string) string {
 	if pkgNode == nil {
 		return ""
@@ -173,16 +166,12 @@ func constantLiteralDetail(pkgNode *ast.BLangPackage, name string) string {
 	return ""
 }
 
-// typeShape holds a type-position item's structural detail and relevance.
 type typeShape struct {
 	detail          string
 	primaryOffset   int8
 	secondaryOffset int8
 }
 
-// classifyTypeSymbol identifies classes by symbol, then classifies other
-// types by a descriptor found by name. Without a descriptor, it falls back
-// to the concrete symbol kind.
 func classifyTypeSymbol(c *cursor, pkgNode *ast.BLangPackage, ref model.SymbolRef) typeShape {
 	ctx := c.sm.Context()
 	if ctx.SymbolIsClass(ref) {
@@ -198,8 +187,6 @@ func classifyTypeSymbol(c *cursor, pkgNode *ast.BLangPackage, ref model.SymbolRe
 	return classifyTypeDescriptor(ctx, owner, descriptor)
 }
 
-// findTypeDescriptorAnywhere searches pkgNode, then available external
-// projections, returning the descriptor and its owning package.
 func findTypeDescriptorAnywhere(c *cursor, pkgNode *ast.BLangPackage, name string) (ast.TypeDescriptor, *ast.BLangPackage) {
 	if descriptor := findTypeDescriptor(pkgNode, name); descriptor != nil {
 		return descriptor, pkgNode
@@ -216,7 +203,6 @@ func findTypeDescriptorAnywhere(c *cursor, pkgNode *ast.BLangPackage, name strin
 	return nil, nil
 }
 
-// classifySymbolFallback classifies ref by its concrete symbol type.
 func classifySymbolFallback(ctx *context.CompilerContext, ref model.SymbolRef) typeShape {
 	switch ctx.GetSymbol(ref).(type) {
 	case model.ClassSymbol:
@@ -232,8 +218,6 @@ func classifySymbolFallback(ctx *context.CompilerContext, ref model.SymbolRef) t
 	}
 }
 
-// classifyTypeDescriptor derives detail and relevance from the AST descriptor,
-// using distinct relevance groups for records, objects, errors, and unions.
 func classifyTypeDescriptor(ctx *context.CompilerContext, pkgNode *ast.BLangPackage, descriptor ast.TypeDescriptor) typeShape {
 	switch node := descriptor.(type) {
 	case *ast.BLangRecordType:
@@ -265,9 +249,6 @@ func capitalizeTypeKind(kind ast.TypeKind) string {
 	return strings.ToUpper(text[:1]) + strings.ToLower(text[1:])
 }
 
-// classifyUnion uses "Union" detail. Uniform flattened leaf categories use
-// their error, record, object, or default relevance; mixed categories use
-// union relevance.
 func classifyUnion(ctx *context.CompilerContext, pkgNode *ast.BLangPackage, union *ast.BLangUnionTypeNode) typeShape {
 	leaves := flattenUnionLeaves(ctx, pkgNode, union)
 	secondaryOffset := typeDefinitionDefaultOffset
@@ -291,9 +272,7 @@ func classifyUnion(ctx *context.CompilerContext, pkgNode *ast.BLangPackage, unio
 	return typeShape{detail: "Union", primaryOffset: typeDefinitionOtherModuleOffset, secondaryOffset: secondaryOffset}
 }
 
-// flattenUnionLeaves flattens union nodes and named references whose resolved
-// descriptor is a union in pkgNode. Other named references retain the "ref"
-// category rather than the target descriptor's category.
+// Only union aliases are expanded; other named types retain the "ref" category.
 func flattenUnionLeaves(ctx *context.CompilerContext, pkgNode *ast.BLangPackage, descriptor ast.TypeDescriptor) []string {
 	if union, ok := descriptor.(*ast.BLangUnionTypeNode); ok {
 		leaves := flattenUnionLeaves(ctx, pkgNode, union.Lhs().TypeDescriptor)
@@ -309,8 +288,7 @@ func flattenUnionLeaves(ctx *context.CompilerContext, pkgNode *ast.BLangPackage,
 	return []string{unionLeafCategory(descriptor)}
 }
 
-// resolveNamedTypeDescriptor uses named's resolved type-symbol name to look
-// up a declaration in pkgNode; it does not search other packages.
+// Named-type lookup is limited to pkgNode.
 func resolveNamedTypeDescriptor(ctx *context.CompilerContext, pkgNode *ast.BLangPackage, named *ast.BLangUserDefinedType) ast.TypeDescriptor {
 	ref := named.Symbol()
 	if ref.IsEmpty() || ctx.SymbolKind(ref) != model.SymbolKindType {
@@ -319,8 +297,7 @@ func resolveNamedTypeDescriptor(ctx *context.CompilerContext, pkgNode *ast.BLang
 	return findTypeDescriptor(pkgNode, ctx.SymbolName(ref))
 }
 
-// unionLeafCategory classifies a leaf by AST kind, distinguishing basic
-// types by TypeKind so int|string has mixed categories.
+// Keep basic types distinct so int|string is heterogeneous.
 func unionLeafCategory(descriptor ast.TypeDescriptor) string {
 	switch node := descriptor.(type) {
 	case *ast.BLangRecordType:
@@ -348,8 +325,6 @@ func unionLeafCategory(descriptor ast.TypeDescriptor) string {
 	}
 }
 
-// classifyConstrained distinguishes map<T> and typedesc<T> by base type;
-// both use default relevance.
 func classifyConstrained(node *ast.BLangConstrainedType) typeShape {
 	switch safeConstraintKind(node) {
 	case ast.TypeKindTypeDesc:
@@ -361,7 +336,6 @@ func classifyConstrained(node *ast.BLangConstrainedType) typeShape {
 	}
 }
 
-// safeConstraintKind returns TypeKindNone for an unrecognized base descriptor.
 func safeConstraintKind(node *ast.BLangConstrainedType) ast.TypeKind {
 	switch base := node.GetType().TypeDescriptor.(type) {
 	case *ast.BLangBuiltInRefTypeNode:
@@ -373,15 +347,12 @@ func safeConstraintKind(node *ast.BLangConstrainedType) ast.TypeKind {
 	}
 }
 
-// isEnumDescriptor recognizes the constant-reference shape used for enums:
-// every flattened member resolves to a constant symbol.
+// Enum descriptors consist of constant references, possibly joined by unions.
 func isEnumDescriptor(ctx *context.CompilerContext, descriptor ast.TypeDescriptor) bool {
 	refs, ok := enumConstantRefs(ctx, descriptor)
 	return ok && len(refs) > 0
 }
 
-// enumMemberNames collects constant names from type definitions whose
-// descriptors have the constant-reference shape recognized by enumConstantRefs.
 func enumMemberNames(ctx *context.CompilerContext, pkgNode *ast.BLangPackage) map[string]bool {
 	members := make(map[string]bool)
 	if pkgNode == nil {
@@ -399,8 +370,6 @@ func enumMemberNames(ctx *context.CompilerContext, pkgNode *ast.BLangPackage) ma
 	return members
 }
 
-// enumConstantRefs flattens union nodes, requiring each leaf to be a name
-// reference resolving to a constant symbol.
 func enumConstantRefs(ctx *context.CompilerContext, descriptor ast.TypeDescriptor) ([]model.SymbolRef, bool) {
 	if union, ok := descriptor.(*ast.BLangUnionTypeNode); ok {
 		left, ok := enumConstantRefs(ctx, union.Lhs().TypeDescriptor)
@@ -424,7 +393,6 @@ func enumConstantRefs(ctx *context.CompilerContext, descriptor ast.TypeDescripto
 	return []model.SymbolRef{ref}, true
 }
 
-// findTypeDescriptor looks up a type definition's descriptor by declared name.
 func findTypeDescriptor(pkgNode *ast.BLangPackage, name string) ast.TypeDescriptor {
 	if pkgNode == nil {
 		return nil

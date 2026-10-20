@@ -17,8 +17,6 @@ package completion
 
 import "github.com/ballerina-nutcracker/ballerina/ls/protocol"
 
-// lexicalHandler offers visible symbols when no earlier handler or shared
-// cursor winner applies and the chain has an enclosing scope.
 var lexicalHandler = handler{
 	name:  "lexical",
 	match: matchLexical,

@@ -17,16 +17,13 @@ package completion
 
 import "github.com/ballerina-nutcracker/ballerina/ls/protocol"
 
-// handler pairs a cursor predicate with a candidate builder, passing the
-// matched context from match to build.
 type handler struct {
 	name  string
 	match func(*cursor) (any, bool)
 	build func(*cursor, any) []protocol.CompletionItem
 }
 
-// handlers is ordered by priority; dispatch returns the first match's result,
-// even when it is empty.
+// The first match wins, even when it yields no candidates.
 var handlers = []handler{
 	typeDefinitionHandler,
 	enumDeclarationHandler,

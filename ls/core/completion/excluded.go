@@ -20,9 +20,6 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/ls/protocol"
 )
 
-// These handlers return no candidates when the shared cursor winner is a
-// field access, invocation, import, or module-qualified variable reference.
-
 var fieldAccessHandler = handler{
 	name:  "field-access",
 	match: matchFieldAccess,

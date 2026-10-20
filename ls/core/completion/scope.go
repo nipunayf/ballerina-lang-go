@@ -22,8 +22,6 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/semtypes"
 )
 
-// expectedTypeCompatible reports whether ty is a subtype of expected in c's
-// type environment.
 func expectedTypeCompatible(c *cursor, ty, expected semtypes.SemType) bool {
 	return semtypes.IsSubtype(semtypes.ContextFrom(c.sm.Context().GetTypeEnv()), ty, expected)
 }

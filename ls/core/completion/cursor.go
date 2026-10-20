@@ -42,15 +42,11 @@ func newCursor(req Request, sm compile.SealedModule, packages []AvailablePackage
 	return c
 }
 
-// winner returns the cached nearestChainMatch result shared by the excluded,
-// block, module, and lexical handlers. A nested block can therefore take
-// precedence over an enclosing invocation.
 func (c *cursor) winner() (ast.BLangNode, bool) {
 	return c.winnerNode, c.winnerMatched
 }
 
-// nearestChainMatch searches from the innermost chain node for an excluded
-// context, a block statement boundary, or a module declaration boundary.
+// Inner contexts take precedence, including blocks nested in invocations.
 func nearestChainMatch(c *cursor) (ast.BLangNode, bool) {
 	for i := len(c.chain) - 1; i >= 0; i-- {
 		switch node := c.chain[i].(type) {
@@ -85,8 +81,6 @@ func isBadTopLevel(node ast.BLangNode) bool {
 	return ok
 }
 
-// containsBadNode detects bad nodes nested within a recovered declaration,
-// allowing nearestChainMatch to select the module context for that declaration.
 func containsBadNode(node ast.BLangNode) bool {
 	d := &badNodeDetector{}
 	ast.Walk(d, node)

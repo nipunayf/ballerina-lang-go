@@ -46,7 +46,7 @@ func signatureSkipList() []string {
 		"ls/corpus/signature/testdata/ast-nested-recovery.signatureHelp.json",
 		"ls/corpus/signature/testdata/langlib-second-argument.signatureHelp.json",
 		"ls/corpus/signature/testdata/recovery.signatureHelp.json",
-		// TODO: Re-enable these configs when the stashed incomplete-call compiler support is restored.
+		// TODO: Support incomplete calls before enabling these fixtures.
 		"ls/corpus/signature/testdata/delimiter-imported-both-empty.signatureHelp.json",
 		"ls/corpus/signature/testdata/delimiter-imported-both-supplied.signatureHelp.json",
 		"ls/corpus/signature/testdata/delimiter-imported-both-trailing.signatureHelp.json",

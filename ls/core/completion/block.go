@@ -20,8 +20,6 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/ls/protocol"
 )
 
-// blockHandler offers block-level keywords and visible symbols at statement
-// boundaries, including recovered bad statements.
 var blockHandler = handler{
 	name:  "block",
 	match: matchBlock,

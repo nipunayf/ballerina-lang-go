@@ -26,27 +26,30 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/ls/protocol"
 )
 
+// Request identifies a completion position; Offset is a byte offset in Text.
 type Request struct {
 	URI    workspace.DocumentURI
 	Text   string
 	Offset int
 }
 
+// AvailablePackage identifies a package offered for import completion.
 type AvailablePackage struct {
 	Organization string
 	Name         string
 }
 
+// Option configures a completion service.
 type Option func(*Service)
 
+// WithAvailablePackages sets the packages offered for import completion.
 func WithAvailablePackages(packages []AvailablePackage) Option {
 	return func(s *Service) {
 		s.packages = append([]AvailablePackage(nil), packages...)
 	}
 }
 
-// WithLogger sets the logger used by WithASTDebugLogging. The default is
-// observability.NewNoop(); a nil logger leaves it unchanged.
+// WithLogger sets the AST debug logger. A nil logger leaves it unchanged.
 func WithLogger(logger *observability.Logger) Option {
 	return func(s *Service) {
 		if logger != nil {
@@ -55,15 +58,15 @@ func WithLogger(logger *observability.Logger) Option {
 	}
 }
 
-// WithASTDebugLogging enables per-request logging of the pretty-printed AST
-// rooted at the first cursor-chain node. Logging is disabled by default;
-// use WithLogger to replace the default no-op logger.
+// WithASTDebugLogging enables cursor AST logging through the WithLogger logger.
+// The default logger discards output.
 func WithASTDebugLogging() Option {
 	return func(s *Service) {
 		s.debugAST = true
 	}
 }
 
+// Service provides completion candidates from sealed compiler modules.
 type Service struct {
 	compiler *compile.CompilationService
 	packages []AvailablePackage
@@ -71,6 +74,7 @@ type Service struct {
 	debugAST bool
 }
 
+// New creates a completion service with the given compiler and options.
 func New(compiler *compile.CompilationService, options ...Option) *Service {
 	service := &Service{compiler: compiler, logger: observability.NewNoop()}
 	for _, option := range options {
@@ -79,6 +83,7 @@ func New(compiler *compile.CompilationService, options ...Option) *Service {
 	return service
 }
 
+// Complete returns candidates at req.Offset, clamped to the bounds of req.Text.
 func (s *Service) Complete(ctx stdcontext.Context, req Request) ([]protocol.CompletionItem, error) {
 	if req.Offset < 0 {
 		req.Offset = 0

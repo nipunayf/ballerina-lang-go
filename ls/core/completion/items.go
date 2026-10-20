@@ -91,8 +91,6 @@ func completionItemKind(kind model.SymbolKind) protocol.CompletionItemKind {
 	}
 }
 
-// functionSignatureLabel renders parameter names as "(a, b, ...rest)",
-// prefixing the rest parameter with an ellipsis.
 func functionSignatureLabel(sig model.UntypedFunctionSignature) string {
 	fixed := sig.FixedParamCount()
 	params := make([]string, 0, len(sig.ParamNames))

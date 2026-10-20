@@ -17,9 +17,7 @@ package completion
 
 import "github.com/ballerina-nutcracker/ballerina/model"
 
-// moduleContentSymbols walks enclosing scopes for a prefix binding, using
-// PackageScope.Virtual at package scope. It looks up prefix verbatim without
-// the language-library alias mapping used by model.ModuleScope.GetPrefixedSymbol.
+// Prefixes are matched verbatim, without ModuleScope.GetPrefixedSymbol's langlib mapping.
 func moduleContentSymbols(scope model.Scope, prefix string) (model.ExportedSymbolSpace, bool) {
 	for scope != nil {
 		switch s := scope.(type) {

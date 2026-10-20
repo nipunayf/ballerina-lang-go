@@ -50,7 +50,7 @@ type transcript struct {
 	Unordered               bool              `json:"unordered,omitempty"`
 }
 
-// stepTransport retains server state across framed batches separated by test writes.
+// The reader is replaced between batches; the server and output buffer are reused.
 type stepTransport struct {
 	reader io.Reader
 	writer bytes.Buffer
@@ -70,7 +70,6 @@ type diskWriteAction struct {
 	remove  bool
 }
 
-// Keep the historical fixture sentinel so existing golden transcripts do not change.
 const diskWriteMethod = "$pal/writeFile"
 const diskDeleteMethod = "$test/deleteFile"
 

@@ -10,6 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package signature renders call signatures from sealed compiler modules.
 package signature
 
 import (
@@ -34,6 +35,8 @@ type Help struct {
 	ActiveParameter        *int
 }
 
+// At returns signature help at a byte offset in uri's source.
+// The boolean is false when no supported call signature can be determined.
 func At(ctx stdcontext.Context, sm compile.SealedModule, uri workspace.DocumentURI, offset int) (Help, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return Help{}, false, err
@@ -119,8 +122,7 @@ func emptyCallContext(paths [][]ast.BLangNode, call ast.BLangNode, args []ast.BL
 	return true
 }
 
-// loweredMethodCallAlias recognizes langlib calls rewritten from x.f(args) to f(x, args...).
-// Their synthetic package alias spans the whole call.
+// Langlib lowering rewrites x.f(args) to f(x, args...) with a call-wide package alias.
 func loweredMethodCallAlias(call ast.BLangNode) (ast.BLangNode, bool) {
 	inv, ok := call.(*ast.BLangInvocation)
 	if !ok || inv.Expr != nil || inv.PkgAlias == nil || len(inv.ArgExprs) == 0 {
@@ -190,8 +192,7 @@ func argumentIndex(call ast.BLangNode, args []ast.BLangExpression, chain []ast.B
 	return 0, false
 }
 
-// isMalformedArgument rejects bad nodes unless they have usable, zero-width locations
-// representing missing arguments (e.g. foo(1, )).
+// Zero-width bad expressions can mark missing arguments, as in foo(1, ).
 func isMalformedArgument(arg ast.BLangExpression) bool {
 	if _, bad := arg.(*ast.BLangBadExprOrAction); !bad {
 		return false
