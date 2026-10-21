@@ -253,12 +253,12 @@ func completionConfigRequest(t *testing.T, env completionConfigEnv, sourcePath, 
 				"uri": "file://" + documentPath, "languageId": "ballerina", "version": 1, "text": source,
 			},
 		}),
-		completionConfigMessage(nil, "$pal/flush", map[string]any{}),
+		completionConfigMessage(nil, "$test/flush", map[string]any{}),
 		completionConfigMessage(2, "textDocument/completion", map[string]any{
 			"textDocument": map[string]any{"uri": "file://" + documentPath},
 			"position":     position,
 		}),
-		completionConfigMessage(nil, "$pal/flushRequests", map[string]any{}),
+		completionConfigMessage(nil, "$test/flushRequests", map[string]any{}),
 	}
 	var input bytes.Buffer
 	for _, message := range messages {

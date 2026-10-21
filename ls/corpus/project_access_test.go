@@ -75,13 +75,13 @@ func TestProjectAccessHotPathDoesNotOpenDirectories(t *testing.T) {
 	}
 	batch(completionConfigMessage(1, "initialize", map[string]any{}),
 		completionConfigMessage(nil, "textDocument/didOpen", map[string]any{"textDocument": map[string]any{"uri": uri.String(), "languageId": "ballerina", "version": 1, "text": source}}),
-		completionConfigMessage(nil, "$pal/flush", map[string]any{}))
+		completionConfigMessage(nil, "$test/flush", map[string]any{}))
 	if calls.Load() == 0 {
 		t.Fatal("opener was never used for initial load")
 	}
 	before := calls.Load()
 	batch(completionConfigMessage(nil, "textDocument/didChange", map[string]any{"textDocument": map[string]any{"uri": uri.String(), "version": 2}, "contentChanges": []any{map[string]any{"range": map[string]any{"start": protocol.Position{}, "end": protocol.Position{}}, "text": " "}}}),
-		completionConfigMessage(nil, "$pal/flush", map[string]any{}))
+		completionConfigMessage(nil, "$test/flush", map[string]any{}))
 	if calls.Load() != before {
 		t.Fatal("didChange reopened source directories")
 	}
@@ -90,7 +90,7 @@ func TestProjectAccessHotPathDoesNotOpenDirectories(t *testing.T) {
 		character uint32
 	}{{"textDocument/completion", 4}, {"textDocument/signatureHelp", 18}} {
 		responses := batch(completionConfigMessage(2, request.method, map[string]any{"textDocument": map[string]any{"uri": uri.String()}, "position": protocol.Position{Line: callLine, Character: request.character}}),
-			completionConfigMessage(nil, "$pal/flushRequests", map[string]any{}))
+			completionConfigMessage(nil, "$test/flushRequests", map[string]any{}))
 		if calls.Load() != before {
 			t.Fatalf("%s reopened source directories", request.method)
 		}

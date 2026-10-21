@@ -24,7 +24,7 @@
     },
     {
       "jsonrpc": "2.0",
-      "method": "$pal/flush",
+      "method": "$test/flush",
       "params": {}
     },
     {
@@ -43,7 +43,7 @@
     },
     {
       "jsonrpc": "2.0",
-      "method": "$pal/flushRequests",
+      "method": "$test/flushRequests",
       "params": {}
     },
     {
@@ -62,7 +62,7 @@
     },
     {
       "jsonrpc": "2.0",
-      "method": "$pal/flushRequests",
+      "method": "$test/flushRequests",
       "params": {}
     },
     {
@@ -81,7 +81,7 @@
     },
     {
       "jsonrpc": "2.0",
-      "method": "$pal/flushRequests",
+      "method": "$test/flushRequests",
       "params": {}
     }
   ],

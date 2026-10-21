@@ -7,10 +7,10 @@ and sibling declarations, UTF-16, capability negotiation, and request lifetime.
 class type before the compiler assigns `ClassSymbol`.
 
 The three waiting transcripts use `holdSignatureDependency` and the existing
-repository-injection seam. `$pal/awaitSignatureDependency` observes actual
+repository-injection seam. `$test/awaitSignatureDependency` observes actual
 background resolution blocked on a repository call and asserts that no sealed
-generation exists before the help request. `$pal/releaseSignatureDependency`
-releases compilation; `$pal/flush` and `$pal/flushRequests` drain work. No timers,
+generation exists before the help request. `$test/releaseSignatureDependency`
+releases compilation; `$test/flush` and `$test/flushRequests` drain work. No timers,
 sleeps, or polling establish the ordering. Cancellation replies are drained
 while resolution is still held, and a later help request proves that request
 cancellation did not cancel the compiler. Unordered comparison preserves reply

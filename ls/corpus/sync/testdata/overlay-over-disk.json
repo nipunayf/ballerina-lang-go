@@ -29,7 +29,7 @@
     },
     {
       "jsonrpc": "2.0",
-      "method": "$pal/flush",
+      "method": "$test/flush",
       "params": {}
     },
     {

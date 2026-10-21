@@ -38,12 +38,12 @@
     },
     {
       "jsonrpc": "2.0",
-      "method": "$pal/flush",
+      "method": "$test/flush",
       "params": {}
     },
     {
       "jsonrpc": "2.0",
-      "method": "$pal/writeFile",
+      "method": "$test/writeFile",
       "params": {
         "path": "modules/util/Ballerina.toml",
         "content": "[package]\norg=\"ls\"\nname=\"innerpkg\"\nversion=\"0.1.0\"\n"
@@ -63,7 +63,7 @@
     },
     {
       "jsonrpc": "2.0",
-      "method": "$pal/flush",
+      "method": "$test/flush",
       "params": {}
     },
     {
@@ -82,7 +82,7 @@
     },
     {
       "jsonrpc": "2.0",
-      "method": "$pal/flushRequests",
+      "method": "$test/flushRequests",
       "params": {}
     },
     {
@@ -101,7 +101,7 @@
     },
     {
       "jsonrpc": "2.0",
-      "method": "$pal/flushRequests",
+      "method": "$test/flushRequests",
       "params": {}
     }
   ],

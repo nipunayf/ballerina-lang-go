@@ -23,8 +23,8 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/projects"
 )
 
-const awaitSignatureDependency = "$pal/awaitSignatureDependency"
-const releaseSignatureDependency = "$pal/releaseSignatureDependency"
+const awaitSignatureDependency = "$test/awaitSignatureDependency"
+const releaseSignatureDependency = "$test/releaseSignatureDependency"
 
 // Block dependency resolution so fixtures can issue requests before a generation seals.
 type signatureGateRepository struct {
